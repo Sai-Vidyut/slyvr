@@ -1,0 +1,51 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives
+*.zip
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+*.egg-info/
+.eggs/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# SQLite databases & backups
+*.db
+*.db*
+
+# Upload/temp directories (runtime artifacts)
+Uploads/
+Backend/temp/
+Backend/temp_uploads/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# v1.0.0
