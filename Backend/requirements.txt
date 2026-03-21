@@ -5,3 +5,4 @@ python-dotenv>=1.2.0
 python-multipart>=0.0.20
 azure-storage-blob>=12.29.0
 requests>=2.32.0
+
