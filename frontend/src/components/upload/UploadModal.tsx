@@ -1,15 +1,36 @@
-import { useEffect, useState } from "react";
+import { AnimatePresence, m } from "framer-motion";
+import { CheckCircle2, FileVideo, Loader2, Upload, X } from "lucide-react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { motionToast as toast } from "@/components/ui/motion-toast";
 
-import api, {
-  getCategories,
-  getPeople,
-  createCategory,
-  createPerson,
-} from "../../services/api";
+import {
+  useCategoriesQuery,
+  useCreateCategoryMutation,
+  useCreatePersonMutation,
+  useInvalidateClips,
+  usePeopleQuery,
+} from "@/hooks/use-clips-queries";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { MotionButton } from "@/components/ui/motion-button";
+import {
+  backdropVariants,
+  fadeUp,
+  modalPanelVariants,
+  motionTransition,
+  staggerItem,
+  tweenFast,
+  tweenSurface,
+  tweenUi,
+} from "@/lib/motion";
+import { cn } from "@/lib/utils";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { uploadClip } from "@/services/api";
+import { getApiErrorMessage } from "@/lib/api-client";
 
 interface Props {
-  isOpen: boolean;
   onClose: () => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 interface UploadItem {
@@ -18,687 +39,535 @@ interface UploadItem {
   description: string;
 }
 
-interface Category {
-  id: number;
-  name: string;
-}
+type UploadPhase = "idle" | "selected" | "uploading" | "success" | "error";
 
-interface Person {
-  id: number;
-  name: string;
-}
+const MEDIA_ACCEPT =
+  "video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,image/jpeg,image/png,image/webp,image/heic,image/heif,image/tiff,image/gif";
 
-function UploadModal({
-  isOpen,
-  onClose,
-}: Props) {
-  const [files, setFiles] =
-    useState<UploadItem[]>([]);
+function UploadModal({ onClose, returnFocusRef }: Props) {
+  const reducedMotion = useReducedMotion();
+  const transition = motionTransition(reducedMotion, tweenSurface);
+  const invalidateClips = useInvalidateClips();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const [uploading, setUploading] =
-    useState(false);
-  const [uploadProgress, setUploadProgress] =
-    useState(0);
+  const { data: categories = [] } = useCategoriesQuery();
+  const { data: people = [] } = usePeopleQuery();
+  const createCategoryMutation = useCreateCategoryMutation();
+  const createPersonMutation = useCreatePersonMutation();
 
-  const [categories, setCategories] =
-    useState<Category[]>([]);
+  const [files, setFiles] = useState<UploadItem[]>([]);
+  const [phase, setPhase] = useState<UploadPhase>("idle");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
-  const [people, setPeople] =
-    useState<Person[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [selectedPeople, setSelectedPeople] = useState<number[]>([]);
+  const [applyTitle, setApplyTitle] = useState("");
+  const [applyDescription, setApplyDescription] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [newPerson, setNewPerson] = useState("");
 
-  const [selectedCategory,
-    setSelectedCategory] =
-    useState<number | null>(null);
+  const requestClose = useCallback(() => {
+    if (phase === "uploading") return;
+    onClose();
+  }, [onClose, phase]);
 
-  const [selectedPeople,
-    setSelectedPeople] =
-    useState<number[]>([]);
-
-  const [applyTitle,
-    setApplyTitle] =
-    useState("");
-
-  const [applyDescription,
-    setApplyDescription] =
-    useState("");
-
-  const [newCategory,
-    setNewCategory] =
-    useState("");
-
-  const [newPerson,
-    setNewPerson] =
-    useState("");
+  useDialogFocus({
+    open: true,
+    containerRef: dialogRef,
+    initialFocusRef: closeButtonRef,
+    returnFocusRef,
+    onEscape: requestClose,
+  });
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const cats =
-          await getCategories();
-
-        const persons =
-          await getPeople();
-
-        setCategories(cats);
-        setPeople(persons);
-      } catch (err) {
-        console.error(err);
-      }
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
     };
-
-    loadData();
   }, []);
 
-  if (!isOpen) return null;
-
-  const handleFileSelect = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const selectedFiles = Array.from(
-      e.target.files || []
+  const addFiles = (incoming: File[]) => {
+    const videos = incoming.filter(
+      (f) => f.type.startsWith("video/") || f.type.startsWith("image/"),
     );
-
-    const newFiles: UploadItem[] =
-      selectedFiles.map((file) => ({
-        file,
-        title: "",
-        description: "",
-      }));
-
-    setFiles(newFiles);
+    if (videos.length === 0) {
+      toast.error("Please select valid video or image files");
+      return;
+    }
+    if (videos.length < incoming.length) {
+      toast.message("Some files were skipped (videos and images only)");
+    }
+    const newItems: UploadItem[] = videos.map((file) => ({
+      file,
+      title: "",
+      description: "",
+    }));
+    setFiles((prev) => [...prev, ...newItems]);
+    setPhase("selected");
   };
 
-  const updateFile = (
-    index: number,
-    field: keyof UploadItem,
-    value: string
-  ) => {
-    const updated = [...files];
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files || []));
+    e.target.value = "";
+  };
 
-    updated[index] = {
-      ...updated[index],
-      [field]: value,
-    };
-
-    setFiles(updated);
+  const updateFile = (index: number, field: keyof UploadItem, value: string) => {
+    setFiles((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
   const applyToAll = () => {
-    const updated = files.map(
-      (item, index) => ({
+    setFiles((prev) =>
+      prev.map((item, index) => ({
         ...item,
-
         title:
-          files.length === 1
+          prev.length === 1
             ? applyTitle
-            : index === 0
-            ? applyTitle
-            : `${applyTitle} (${index})`,
-
-        description:
-          applyDescription,
-      })
+            : applyTitle
+              ? `${applyTitle}${index > 0 ? ` (${index + 1})` : ""}`
+              : item.title,
+        description: applyDescription || item.description,
+      })),
     );
-
-    setFiles(updated);
   };
-  
-  const handleAddCategory =
-    async () => {
-      if (!newCategory.trim())
-        return;
 
-      try {
-        const category =
-          await createCategory(
-            newCategory
+  const togglePerson = (personId: number) => {
+    setSelectedPeople((prev) =>
+      prev.includes(personId)
+        ? prev.filter((id) => id !== personId)
+        : [...prev, personId],
+    );
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategory.trim();
+    if (!name) return;
+    const category = await createCategoryMutation.mutateAsync(name);
+    setSelectedCategory(category.id);
+    setNewCategory("");
+  };
+
+  const handleAddPerson = async () => {
+    const name = newPerson.trim();
+    if (!name) return;
+    const person = await createPersonMutation.mutateAsync(name);
+    setSelectedPeople((prev) => [...prev, person.id]);
+    setNewPerson("");
+  };
+
+  const handleUpload = async () => {
+    if (files.length === 0) {
+      toast.error("Select at least one video");
+      return;
+    }
+    const missingTitle = files.some((f) => !f.title.trim());
+    if (missingTitle) {
+      toast.error("Each clip needs a title");
+      return;
+    }
+
+    setPhase("uploading");
+    setUploadProgress(null);
+
+    try {
+      let completed = 0;
+      for (const item of files) {
+        const formData = new FormData();
+        formData.append("video", item.file);
+        formData.append("title", item.title.trim());
+        formData.append("description", item.description);
+        if (selectedCategory != null) {
+          formData.append("category_id", String(selectedCategory));
+        }
+        formData.append("person_ids", selectedPeople.join(","));
+
+        await uploadClip(formData, (percent) => {
+          const aggregate = Math.round(
+            ((completed + percent / 100) / files.length) * 100,
           );
-
-        setCategories([
-          ...categories,
-          category,
-        ]);
-
-        setSelectedCategory(
-          category.id
-        );
-
-        setNewCategory("");
-      } catch (err) {
-        console.error(err);
-        alert(
-          "Failed to create category"
-        );
+          setUploadProgress(aggregate);
+        });
+        completed += 1;
+        setUploadProgress(Math.round((completed / files.length) * 100));
       }
-    };
 
-  const handleAddPerson =
-    async () => {
-      if (!newPerson.trim())
-        return;
-
-      try {
-        const person =
-          await createPerson(
-            newPerson
-          );
-
-        setPeople([
-          ...people,
-          person,
-        ]);
-
-        setSelectedPeople([
-          ...selectedPeople,
-          person.id,
-        ]);
-
-        setNewPerson("");
-      } catch (err) {
-        console.error(err);
-        alert(
-          "Failed to create person"
-        );
-      }
-    };
-
-  const togglePerson = (
-    personId: number
-  ) => {
-    if (
-      selectedPeople.includes(
-        personId
-      )
-    ) {
-      setSelectedPeople(
-        selectedPeople.filter(
-          (id) =>
-            id !== personId
-        )
+      setPhase("success");
+      toast.success(
+        `${files.length} clip${files.length === 1 ? "" : "s"} uploaded`,
       );
-    } else {
-      setSelectedPeople([
-        ...selectedPeople,
-        personId,
-      ]);
+      invalidateClips();
+      window.setTimeout(() => {
+        onClose();
+      }, 600);
+    } catch (error) {
+      console.error(error);
+      setPhase("error");
+      toast.error(getApiErrorMessage(error));
     }
   };
 
-  const handleUpload =
-    async () => {
-      if (
-        files.length === 0
-      ) {
-        alert(
-          "Please select at least one video"
-        );
-        return;
-      }
+  if (typeof document === "undefined") return null;
 
-      try {
-        setUploading(true);
-        setUploadProgress(0);
-
-        await Promise.all(
-          files.map(
-            async (item) => {
-              const formData =
-                new FormData();
-
-              formData.append(
-                "video",
-                item.file
-              );
-
-              formData.append(
-                "title",
-                item.title
-              );
-
-              formData.append(
-                "description",
-                item.description
-              );
-
-              if (
-                selectedCategory
-              ) {
-                formData.append(
-                  "category_id",
-                  selectedCategory.toString()
-                );
-              }
-
-              formData.append(
-                "person_ids",
-                selectedPeople.join(
-                  ","
-                )
-              );
-
-              return api.post(
-                "/upload",
-                formData,
-                {
-                    headers: {
-                        "Content-Type":
-                        "multipart/form-data",
-                    },
-                    onUploadProgress: (
-                        progressEvent
-                    ) => {
-                        const percent =
-                           Math.round(
-                            (
-                                (progressEvent.loaded || 0) *
-                                100
-                            ) /
-                            (progressEvent.total || 1)
-                        );
-                        setUploadProgress(
-                            percent
-                        );
-                    },
-                }
-            );
-            }
-          )
-        );
-
-        alert(
-          `${files.length} file(s) uploaded successfully`
-        );
-
-        window.location.reload();
-      } catch (error) {
-        console.error(
-          error
-        );
-
-        alert(
-          "One or more uploads failed"
-        );
-      } finally {
-        setUploading(false);
-      }
-    };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-[900px] max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl p-6">
-
-        <h2 className="text-3xl font-bold mb-6">
-          Upload Videos
-        </h2>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 mb-6">
-          <h3 className="font-semibold mb-4">
-            Apply To All
-          </h3>
-
-          <div className="space-y-3">
-            <input
-              placeholder="Base Title"
-              value={applyTitle}
-              onChange={(e) =>
-                setApplyTitle(
-                  e.target.value
-                )
-              }
-              className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
-            />
-
-            <textarea
-              placeholder="Description"
-              value={
-                applyDescription
-              }
-              onChange={(e) =>
-                setApplyDescription(
-                  e.target.value
-                )
-              }
-              rows={3}
-              className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
-            />
-
-            <button
-              onClick={applyToAll}
-              className="rounded-xl bg-cyan-500 px-5 py-3 text-black font-medium"
-            >
-              Apply To All
-            </button>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-            <h3 className="font-semibold mb-3">
-              Category
-            </h3>
-
-            <select
-              value={
-                selectedCategory ??
-                ""
-              }
-              onChange={(e) =>
-                setSelectedCategory(
-                  Number(
-                    e.target.value
-                  )
-                )
-              }
-              className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
-            >
-              <option value="">
-                Select Category
-              </option>
-
-              {categories.map(
-                (category) => (
-                  <option
-                    key={
-                      category.id
-                    }
-                    value={
-                      category.id
-                    }
-                  >
-                    {
-                      category.name
-                    }
-                  </option>
-                )
-              )}
-            </select>
-
-            <div className="flex gap-2 mt-3">
-              <input
-                placeholder="New Category"
-                value={
-                  newCategory
-                }
-                onChange={(e) =>
-                  setNewCategory(
-                    e.target.value
-                  )
-                }
-                className="flex-1 rounded-xl bg-slate-900 border border-slate-700 p-3"
-              />
-
-              <button
-                onClick={
-                  handleAddCategory
-                }
-                className="px-4 rounded-xl bg-cyan-500 text-black"
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-            <h3 className="font-semibold mb-3">
-              People
-            </h3>
-
-            <div className="max-h-52 overflow-y-auto space-y-2 mb-3">
-              {people.map((person) => (
-                <label
-                  key={person.id}
-                  className="flex items-center gap-3 rounded-xl bg-slate-900 p-3 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedPeople.includes(
-                      person.id
-                    )}
-                    onChange={() =>
-                      togglePerson(
-                        person.id
-                      )
-                    }
-                  />
-
-                  <span>
-                    {person.name}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                placeholder="New Person"
-                value={newPerson}
-                onChange={(e) =>
-                  setNewPerson(
-                    e.target.value
-                  )
-                }
-                className="flex-1 rounded-xl bg-slate-900 border border-slate-700 p-3"
-              />
-
-              <button
-                onClick={
-                  handleAddPerson
-                }
-                className="px-4 rounded-xl bg-cyan-500 text-black"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="
-            border
-            border-dashed
-            border-slate-700
-            rounded-2xl
-            p-6
-            text-center
-            bg-slate-900/50
-            hover:border-cyan-500
-            transition-all
-            mb-6
-          "
-        >
-          <input
-            type="file"
-            accept="video/*"
-            multiple
-            id="video-upload"
-            className="hidden"
-            onChange={
-              handleFileSelect
-            }
-          />
-
-          <label
-            htmlFor="video-upload"
-            className="cursor-pointer block"
+  return createPortal(
+    <AnimatePresence>
+      <>
+          <m.div
+            key="upload-backdrop"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={motionTransition(reducedMotion, tweenUi)}
+            onClick={requestClose}
+            role="presentation"
           >
-            <div className="text-4xl mb-2">
-              🎬
-            </div>
-
-            <p className="text-lg font-semibold">
-              Select Videos
-            </p>
-
-            <p className="text-sm text-slate-500 mt-1">
-              MP4 • MOV • AVI • MXF
-            </p>
-
-            {files.length >
-              0 && (
-              <div className="mt-4 text-cyan-300">
-                {
-                  files.length
-                }{" "}
-                file(s)
-                selected
-              </div>
-            )}
-          </label>
-        </div>
-
-        <div className="space-y-4">
-          {files.map(
-            (
-              item,
-              index
-            ) => (
-              <div
-                key={index}
-                className="
-                  rounded-2xl
-                  border
-                  border-slate-800
-                  bg-slate-900/40
-                  p-4
-                "
-              >
-                <div className="mb-3">
-                  <p className="font-medium text-cyan-300">
-                    {
-                      item.file
-                        .name
-                    }
-                  </p>
-
-                  <p className="text-xs text-slate-500">
-                    {(
-                      item
-                        .file
-                        .size /
-                      1024 /
-                      1024
-                    ).toFixed(
-                      2
-                    )}{" "}
-                    MB
+            <m.div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="upload-modal-title"
+              tabIndex={-1}
+              className="relative max-h-[90vh] w-full max-w-[900px] overflow-y-auto rounded-md border border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] p-6 outline-none"
+              variants={modalPanelVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={transition}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-label">Upload</p>
+                  <h2 id="upload-modal-title" className="text-title mt-1">
+                    Add to library
+                  </h2>
+                  <p className="mt-1 text-sm text-[var(--clip-muted)]">
+                    {phase === "uploading"
+                      ? "Upload in progress…"
+                      : "Add metadata, then upload to cloud storage"}
                   </p>
                 </div>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={requestClose}
+                  disabled={phase === "uploading"}
+                  className="rounded-md p-2 hover:bg-[var(--clip-surface)] disabled:opacity-40"
+                  aria-label="Close upload dialog"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
+              <div className="mb-6 rounded-md border border-[var(--clip-border)] p-4">
+                <h3 className="mb-3 text-sm font-medium">Apply to all</h3>
                 <div className="space-y-3">
                   <input
-                    placeholder="Title *"
-                    value={
-                      item.title
-                    }
-                    onChange={(
-                      e
-                    ) =>
-                      updateFile(
-                        index,
-                        "title",
-                        e.target
-                          .value
-                      )
-                    }
-                    className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
+                    placeholder="Base title"
+                    value={applyTitle}
+                    onChange={(e) => setApplyTitle(e.target.value)}
+                    disabled={phase === "uploading"}
+                    className="surface-inset w-full disabled:opacity-60"
                   />
-
                   <textarea
                     placeholder="Description"
-                    value={
-                      item.description
-                    }
-                    onChange={(
-                      e
-                    ) =>
-                      updateFile(
-                        index,
-                        "description",
-                        e.target
-                          .value
-                      )
-                    }
+                    value={applyDescription}
+                    onChange={(e) => setApplyDescription(e.target.value)}
                     rows={3}
-                    className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
+                    disabled={phase === "uploading"}
+                    className="surface-inset w-full disabled:opacity-60"
                   />
+                  <MotionButton
+                    variant="secondary"
+                    onClick={applyToAll}
+                    disabled={phase === "uploading" || files.length === 0}
+                  >
+                    Apply to all
+                  </MotionButton>
                 </div>
               </div>
-            )
-          )}
-        </div>
 
-        {uploading && (
-            <div className="mb-6">
-                <div className="flex justify-between text-sm mb-2">
-                    <span>
-                        Upload Progress
-                    </span>
-                    
-                    <span>
-                        {uploadProgress}%
-                    </span>
+              <div className="mb-6 grid gap-6 md:grid-cols-2">
+                <div className="rounded-md border border-[var(--clip-border)] p-4">
+                  <h3 className="mb-3 text-sm font-medium">Category</h3>
+                  <select
+                    value={selectedCategory ?? ""}
+                    onChange={(e) =>
+                      setSelectedCategory(
+                        e.target.value ? Number(e.target.value) : null,
+                      )
+                    }
+                    disabled={phase === "uploading"}
+                    className="surface-inset w-full disabled:opacity-60"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      placeholder="New category"
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      disabled={phase === "uploading"}
+                      className="surface-inset flex-1 disabled:opacity-60"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      disabled={phase === "uploading"}
+                      className="min-w-11 rounded-md border border-[var(--clip-border)] bg-[var(--clip-surface)] px-4 disabled:opacity-50"
+                      aria-label="Add category"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                <div className="w-full h-4 rounded-full bg-slate-800 overflow-hidden">
-                    <div
-                    className="
-                    h-full
-                    bg-cyan-500
-                    transition-all
-                    duration-300
-                    "
-                    style={{
-                        width: `${uploadProgress}%`,
-                    }}
-                />
-            </div>
-        </div>
-    )}
-    <div className="mt-6 flex gap-3">
-        <button
-            onClick={
-              onClose
-            }
-            disabled={
-              uploading
-            }
-            className="
-              flex-1
-              rounded-xl
-              bg-slate-800
-              p-3
-              font-medium
-            "
-          >
-            Cancel
-          </button>
 
-          <button
-            onClick={
-              handleUpload
-            }
-            disabled={
-              uploading
-            }
-            className="
-              flex-1
-              rounded-xl
-              bg-cyan-500
-              p-3
-              font-medium
-              text-black
-              hover:bg-cyan-400
-            "
-          >
-            {uploading
-              ? "Uploading..."
-              : `Upload ${
-                  files.length ||
-                  ""
-                }`}
-          </button>
-        </div>
-      </div>
-    </div>
+                <div className="rounded-md border border-[var(--clip-border)] p-4">
+                  <h3 className="mb-3 text-sm font-medium">People</h3>
+                  <div className="mb-3 max-h-52 space-y-2 overflow-y-auto">
+                    {people.length === 0 ? (
+                      <p className="text-meta">No people yet</p>
+                    ) : (
+                      people.map((person) => (
+                        <label
+                          key={person.id}
+                          className="flex min-h-10 cursor-pointer items-center gap-3 rounded-md border border-transparent px-2 hover:border-[var(--clip-border)] hover:bg-[var(--clip-surface)]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedPeople.includes(person.id)}
+                            onChange={() => togglePerson(person.id)}
+                            disabled={phase === "uploading"}
+                          />
+                          <span>{person.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      placeholder="New person"
+                      value={newPerson}
+                      onChange={(e) => setNewPerson(e.target.value)}
+                      disabled={phase === "uploading"}
+                      className="surface-inset flex-1 disabled:opacity-60"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPerson}
+                      disabled={phase === "uploading"}
+                      className="min-w-11 rounded-md border border-[var(--clip-border)] bg-[var(--clip-surface)] px-4 disabled:opacity-50"
+                      aria-label="Add person"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <m.div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (phase === "uploading") return;
+                  addFiles(Array.from(e.dataTransfer.files));
+                }}
+                animate={
+                  reducedMotion
+                    ? undefined
+                    : {
+                        y: dragOver ? -2 : 0,
+                        scale: dragOver ? 1.005 : 1,
+                      }
+                }
+                transition={tweenFast}
+                className={cn(
+                  "mb-6 rounded-md border border-dashed p-8 text-center transition-colors",
+                  dragOver
+                    ? "border-[var(--clip-border-strong)] bg-[var(--clip-surface)]"
+                    : "border-[var(--clip-border)] bg-[var(--clip-bg-elevated)]",
+                )}
+              >
+                <input
+                  type="file"
+                  accept={MEDIA_ACCEPT}
+                  multiple
+                  id="video-upload"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  disabled={phase === "uploading"}
+                />
+                <label
+                  htmlFor="video-upload"
+                  className={cn(
+                    "block cursor-pointer",
+                    phase === "uploading" && "pointer-events-none opacity-60",
+                  )}
+                >
+                  <m.div
+                    animate={
+                      reducedMotion
+                        ? undefined
+                        : { y: dragOver ? -4 : 0, scale: dragOver ? 1.08 : 1 }
+                    }
+                    transition={tweenFast}
+                    className="mx-auto mb-3 inline-flex"
+                  >
+                    <Upload className="text-[var(--clip-muted)]" size={28} />
+                  </m.div>
+                  <p className="text-base font-medium">Drop videos or browse</p>
+                  <p className="mt-1 text-meta">
+                    MP4 · MOV · AVI · MKV
+                  </p>
+                  {files.length > 0 && (
+                    <p className="mt-3 text-sm text-[var(--clip-fg)]">
+                      {files.length} file{files.length === 1 ? "" : "s"} selected
+                    </p>
+                  )}
+                </label>
+              </m.div>
+
+              <AnimatePresence mode="popLayout">
+                <div className="space-y-4">
+                {files.map((item, index) => (
+                  <m.div
+                    key={`${item.file.name}-${index}`}
+                    layout={!reducedMotion}
+                    variants={staggerItem}
+                    initial={reducedMotion ? false : "hidden"}
+                    animate="visible"
+                    exit="exit"
+                    className="rounded-md border border-[var(--clip-border)] p-4"
+                  >
+                    <div className="mb-3 flex items-start gap-3">
+                      <FileVideo className="mt-0.5 shrink-0 text-[var(--clip-muted)]" size={20} />
+                      <div>
+                        <p className="text-sm font-medium">{item.file.name}</p>
+                        <p className="text-meta">
+                          {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <input
+                        placeholder="Title *"
+                        value={item.title}
+                        onChange={(e) => updateFile(index, "title", e.target.value)}
+                        disabled={phase === "uploading"}
+                        className="surface-inset w-full disabled:opacity-60"
+                      />
+                      <textarea
+                        placeholder="Description"
+                        value={item.description}
+                        onChange={(e) =>
+                          updateFile(index, "description", e.target.value)
+                        }
+                        rows={3}
+                        disabled={phase === "uploading"}
+                        className="surface-inset w-full disabled:opacity-60"
+                      />
+                    </div>
+                  </m.div>
+                ))}
+                </div>
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {phase === "success" && (
+                  <m.div
+                    key="upload-success"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
+                  >
+                    <CheckCircle2 size={18} aria-hidden />
+                    Upload complete — refreshing library…
+                  </m.div>
+                )}
+                {phase === "error" && (
+                  <m.div
+                    key="upload-error"
+                    variants={fadeUp}
+                    initial="hidden"
+                    animate="visible"
+                    className="mt-6 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100"
+                  >
+                    Upload failed. Fix any issues and try again.
+                  </m.div>
+                )}
+              </AnimatePresence>
+
+              {phase === "uploading" && uploadProgress != null && (
+                <div className="mb-6 mt-6">
+                  <div className="mb-2 flex justify-between text-sm">
+                    <span>Upload progress</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--clip-surface-3)]">
+                    <m.div
+                      className="h-full bg-[var(--clip-accent)]"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${uploadProgress}%` }}
+                      transition={tweenFast}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {phase === "uploading" && uploadProgress == null && (
+                <div className="mb-6 mt-6 flex items-center gap-2 text-sm text-[var(--clip-muted)]">
+                  <Loader2 className="animate-spin" size={18} />
+                  Uploading…
+                </div>
+              )}
+
+              <div className="mt-6 flex gap-3">
+                <MotionButton
+                  className="flex-1"
+                  onClick={requestClose}
+                  disabled={phase === "uploading"}
+                >
+                  Cancel
+                </MotionButton>
+                <MotionButton
+                  variant="primary"
+                  className="flex-1"
+                  onClick={handleUpload}
+                  disabled={
+                    phase === "uploading" ||
+                    files.length === 0 ||
+                    phase === "success"
+                  }
+                >
+                  {phase === "uploading"
+                    ? "Uploading…"
+                    : `Upload${files.length ? ` (${files.length})` : ""}`}
+                </MotionButton>
+              </div>
+            </m.div>
+          </m.div>
+      </>
+    </AnimatePresence>,
+    document.body,
   );
 }
+
 export default UploadModal;

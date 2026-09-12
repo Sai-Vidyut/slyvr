@@ -1,207 +1,165 @@
-import { X, Calendar, MapPin, Camera } from "lucide-react";
-import { useEffect, useState } from "react";
-import { updateClip, deleteClip } from "../../services/api";
+import { AnimatePresence, m } from "framer-motion";
+import axios from "axios";
+import { X } from "lucide-react";
+import { type RefObject, useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
+
+import { ClipInspectorForm } from "@/components/clips/ClipInspectorForm";
+import { MotionButton } from "@/components/ui/motion-button";
+import { ShimmerBlock } from "@/components/ui/shimmer-skeleton";
+import { useCategoriesQuery, useClipQuery } from "@/hooks/use-clips-queries";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import {
+  backdropVariants,
+  buttonTap,
+  drawerVariants,
+  motionTransition,
+  tweenSurface,
+  tweenUi,
+} from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 interface Props {
-  clip: any;
+  clipId: number | null;
   isOpen: boolean;
   onClose: () => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 function ClipDetailsDrawer({
-  clip,
+  clipId,
   isOpen,
   onClose,
+  returnFocusRef,
 }: Props) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
+  const reducedMotion = useReducedMotion();
+  const transition = motionTransition(reducedMotion, tweenSurface);
+  const titleId = useId();
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const { data: clip, isLoading, isError, error } = useClipQuery(
+    clipId,
+    isOpen && clipId != null,
+  );
+  const { data: categories = [] } = useCategoriesQuery();
+
+  useDialogFocus({
+    open: isOpen && clipId != null,
+    containerRef: drawerRef,
+    initialFocusRef: closeButtonRef,
+    returnFocusRef,
+    onEscape: onClose,
+  });
 
   useEffect(() => {
-    if (!clip) return;
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
 
-    setTitle(clip.title || "");
-    setDescription(clip.description || "");
-    setCategory(clip.category || "");
-  }, [clip]);
+  const is404 =
+    axios.isAxiosError(error) && error.response?.status === 404;
 
-  if (!clip || !isOpen) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
-    <div
-      className="
-        fixed top-0 right-0
-        h-full
-        w-full md:w-[420px]
-        bg-slate-950
-        border-l border-slate-800
-        shadow-2xl
-        z-50
-        overflow-y-auto
-      "
-    >
-      <div className="sticky top-0 z-10 flex items-center justify-between p-4 md:p-6 border-b border-slate-800 bg-slate-950">
-        <h2 className="text-lg md:text-xl font-semibold">
-          Clip Details
-        </h2>
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && clipId != null && (
+        <>
+          <m.button
+            type="button"
+            key="drawer-backdrop"
+            className="fixed inset-0 z-[60] bg-black/55"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={motionTransition(reducedMotion, tweenUi)}
+            onClick={onClose}
+            aria-label="Close clip details"
+          />
 
-        <button
-          onClick={onClose}
-          className="p-2 rounded-lg hover:bg-slate-900"
-        >
-          <X />
-        </button>
-      </div>
-
-      <div className="p-4">
-        <div className="flex justify-center rounded-2xl border border-slate-800 bg-black p-2">
-          <video
-            controls
-            preload="metadata"
-            className="
-              max-h-[220px]
-              md:max-h-[280px]
-              w-auto
-              max-w-full
-              rounded-xl
-            "
+          <m.aside
+            ref={drawerRef}
+            key="drawer-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
+            className={cn(
+              "fixed inset-y-0 right-0 z-[70] flex w-full flex-col outline-none",
+              "border-l border-[var(--clip-border)] bg-[var(--clip-bg-elevated)]",
+              "md:w-[460px]",
+            )}
+            variants={drawerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={transition}
           >
-            <source
-              src={clip.blob_url}
-              type="video/mp4"
-            />
-          </video>
-        </div>
-      </div>
-
-      <div className="p-4 md:p-6 space-y-5 pb-40">
-        <div>
-          <p className="text-slate-500 text-sm mb-2">
-            Title
-          </p>
-
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
-          />
-        </div>
-
-        <div>
-          <p className="text-slate-500 text-sm mb-2">
-            Description
-          </p>
-
-          <textarea
-            value={description}
-            onChange={(e) =>
-              setDescription(e.target.value)
-            }
-            rows={4}
-            className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
-          />
-        </div>
-
-        <div>
-          <p className="text-slate-500 text-sm mb-2">
-            Category
-          </p>
-
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3"
-          />
-        </div>
-
-        <div className="space-y-3 text-sm">
-          {clip.camera_model && (
-            <div className="flex gap-2 items-center">
-              <Camera size={16} />
-              {clip.camera_model}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] px-4 py-3 md:px-6">
+              <div>
+                <p className="text-label">Details</p>
+                <h2 id={titleId} className="text-title mt-0.5">
+                  Clip inspector
+                </h2>
+              </div>
+              <m.button
+                ref={closeButtonRef}
+                type="button"
+                onClick={onClose}
+                whileTap={reducedMotion ? undefined : buttonTap}
+                className="rounded-md p-2 hover:bg-[var(--clip-surface)]"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </m.button>
             </div>
-          )}
 
-          {clip.latitude && clip.longitude && (
-            <div className="flex gap-2 items-center">
-              <MapPin size={16} />
-              {clip.latitude}, {clip.longitude}
+            <div className="flex flex-1 flex-col overflow-y-auto">
+              {isLoading && (
+                <div className="space-y-4 p-4 md:p-6">
+                  <ShimmerBlock className="aspect-video w-full rounded-md" />
+                  <ShimmerBlock className="h-10 w-full" />
+                  <ShimmerBlock className="h-24 w-full" />
+                  <ShimmerBlock className="h-10 w-2/3" />
+                </div>
+              )}
+
+              {isError && !isLoading && (
+                <m.div
+                  initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="px-6 py-12 text-center"
+                >
+                  <p className="font-medium text-red-300">
+                    {is404 ? "Clip not found" : "Could not load this clip"}
+                  </p>
+                  <MotionButton className="mt-4" onClick={onClose}>
+                    Close
+                  </MotionButton>
+                </m.div>
+              )}
+
+              {clip && !isLoading && (
+                <ClipInspectorForm
+                  key={clip.id}
+                  clip={clip}
+                  categories={categories}
+                  onDeleted={onClose}
+                />
+              )}
             </div>
-          )}
-
-          {clip.uploaded_at && (
-            <div className="flex gap-2 items-center">
-              <Calendar size={16} />
-              {new Date(
-                clip.uploaded_at
-              ).toLocaleString()}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="sticky bottom-0 bg-slate-950 border-t border-slate-800 p-4 space-y-3">
-        <button
-          onClick={async () => {
-            try {
-              await updateClip(clip.id, {
-                title,
-                description,
-                category,
-              });
-
-              alert("Changes saved successfully!");
-              window.location.reload();
-            } catch (error) {
-              console.error(error);
-              alert("Failed to save changes.");
-            }
-          }}
-          className="
-            w-full
-            rounded-xl
-            bg-cyan-500
-            p-3
-            font-medium
-            text-black
-            hover:bg-cyan-400
-          "
-        >
-          Save Changes
-        </button>
-
-        <button
-          onClick={async () => {
-            const confirmed = window.confirm(
-              `Delete "${clip.title}"?`
-            );
-
-            if (!confirmed) return;
-
-            try {
-              await deleteClip(clip.id);
-
-              alert("Clip deleted successfully!");
-              window.location.reload();
-            } catch (error) {
-              console.error(error);
-              alert("Failed to delete clip.");
-            }
-          }}
-          className="
-            w-full
-            rounded-xl
-            bg-red-600
-            p-3
-            font-medium
-            text-white
-            hover:bg-red-500
-          "
-        >
-          Delete Clip
-        </button>
-      </div>
-    </div>
+          </m.aside>
+        </>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }
 

@@ -1,117 +1,159 @@
-import {
-  Calendar,
-  MapPin,
-  Camera,
-} from "lucide-react";
+import { m } from "framer-motion";
+import { Film, Play } from "lucide-react";
+import { useState } from "react";
 
-export interface Clip {
-  id: number;
-  title: string;
-  description?: string;
-  category?: string;
-  thumbnail_url?: string;
-  camera_model?: string;
-  latitude?: number;
-  longitude?: number;
-  uploaded_at?: string;
-}
+import { CardBody, CardContainer, CardItem } from "@/components/ui/3d-card";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import {
+  buttonTap,
+  shouldAnimateEntrance,
+  staggerDelay,
+  staggerItem,
+  tweenMicro,
+} from "@/lib/motion";
+import { cn } from "@/lib/utils";
+import type { Clip } from "@/types/clip";
+
+export type { Clip };
 
 interface ClipCardProps {
   clip: Clip;
   onClick?: () => void;
+  layout?: boolean;
+  index?: number;
+  listSize?: number;
+  isSelected?: boolean;
+}
+
+function formatFileSize(bytes: number | null | undefined) {
+  if (bytes == null || bytes <= 0) return null;
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+  return `${bytes} B`;
 }
 
 function ClipCard({
   clip,
   onClick,
+  layout = true,
+  index = 0,
+  listSize = 1,
+  isSelected = false,
 }: ClipCardProps) {
+  const reducedMotion = useReducedMotion();
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const animateEntrance =
+    !reducedMotion && shouldAnimateEntrance(listSize, index);
+
+  const metaParts = [
+    clip.category || "Uncategorized",
+    clip.uploaded_at
+      ? new Date(clip.uploaded_at).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        })
+      : null,
+    clip.people?.length ? clip.people.slice(0, 2).join(", ") : null,
+    formatFileSize(clip.file_size),
+  ].filter(Boolean);
+
+  const showThumb = clip.thumbnail_url && !thumbFailed;
+
   return (
-    <div
+    <m.article
+      layout={layout && !reducedMotion ? "position" : false}
+      variants={animateEntrance ? staggerItem : undefined}
+      initial={animateEntrance ? "hidden" : false}
+      animate="visible"
+      exit={reducedMotion ? undefined : "exit"}
+      transition={
+        animateEntrance
+          ? { delay: staggerDelay(index, listSize), ...tweenMicro }
+          : tweenMicro
+      }
+      whileTap={reducedMotion ? undefined : buttonTap}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
       onClick={onClick}
-      className="
-        group
-        cursor-pointer
-        overflow-hidden
-        rounded-3xl
-        border
-        border-slate-800
-        bg-slate-900/60
-        backdrop-blur-md
-        transition-all
-        duration-300
-        hover:-translate-y-1
-        hover:border-cyan-500/50
-        hover:shadow-[0_0_40px_rgba(34,211,238,0.12)]
-      "
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      aria-label={`Open clip ${clip.title}`}
+      className={cn(
+        "group cursor-pointer outline-none",
+        "focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--clip-bg)]",
+        isSelected &&
+          "ring-1 ring-[var(--clip-border-strong)] ring-offset-2 ring-offset-[var(--clip-bg)]",
+      )}
     >
-      <div className="aspect-video overflow-hidden bg-slate-950">
-        <img
-          src={clip.thumbnail_url}
-          alt={clip.title}
-          className="
-            h-full
-            w-full
-            object-cover
-            transition-transform
-            duration-500
-            group-hover:scale-105
-          "
-        />
-      </div>
-
-      <div className="p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
-            {clip.category || "Uncategorized"}
-          </span>
-        </div>
-
-        <h3 className="text-lg font-semibold text-white line-clamp-1">
-          {clip.title}
-        </h3>
-
-        {clip.uploaded_at && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-            <Calendar size={13} />
-
-            <span>
-              {new Date(
-                clip.uploaded_at
-              ).toLocaleString()}
-            </span>
-          </div>
-        )}
-
-        <p className="mt-3 line-clamp-2 text-sm text-slate-400">
-          {clip.description ||
-            "No description available"}
-        </p>
-
-        <div className="mt-4 space-y-2 text-xs text-slate-500">
-          {clip.camera_model && (
-            <div className="flex items-center gap-2">
-              <Camera size={14} />
-
-              <span className="truncate">
-                {clip.camera_model}
-              </span>
-            </div>
+      <CardContainer>
+        <CardBody
+          className={cn(
+            "relative w-full transition-[transform,box-shadow] duration-300 ease-out",
+            !reducedMotion &&
+              "group-hover:shadow-[0_16px_44px_-32px_rgba(0,0,0,0.9)] group-focus-visible:shadow-[0_16px_44px_-32px_rgba(0,0,0,0.9)]",
           )}
+        >
+          <CardItem translateZ={26} layer="media" className="w-full">
+            <div className="relative aspect-[16/10] overflow-hidden rounded-md bg-[var(--clip-surface)]">
+              <CardItem translateZ={14} layer="media" className="h-full w-full">
+                {showThumb ? (
+                  <img
+                    src={clip.thumbnail_url!}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => setThumbFailed(true)}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--clip-muted)]">
+                    <Film size={22} strokeWidth={1.25} aria-hidden />
+                    <span className="text-meta">No preview</span>
+                  </div>
+                )}
+              </CardItem>
 
-          {clip.latitude &&
-            clip.longitude && (
-              <div className="flex items-center gap-2">
-                <MapPin size={14} />
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/65 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
+                aria-hidden
+              />
 
-                <span className="truncate">
-                  {clip.latitude},{" "}
-                  {clip.longitude}
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-200",
+                  isSelected
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+                )}
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-white/20 bg-black/45 text-white">
+                  <Play size={16} fill="currentColor" aria-hidden />
                 </span>
               </div>
-            )}
-        </div>
-      </div>
-    </div>
+            </div>
+          </CardItem>
+
+          <div className="space-y-1 pt-2.5">
+            <CardItem
+              translateZ={18}
+              as="h3"
+              className="text-card-title line-clamp-1"
+              title={clip.title}
+            >
+              {clip.title}
+            </CardItem>
+            <CardItem translateZ={10} as="p" className="text-meta line-clamp-1">
+              {metaParts.join(" · ")}
+            </CardItem>
+          </div>
+        </CardBody>
+      </CardContainer>
+    </m.article>
   );
 }
 
