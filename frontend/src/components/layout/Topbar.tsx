@@ -153,7 +153,9 @@ function Topbar({
               onBlur={() => setFocused(false)}
               placeholder="Search titles, people, places, devices…"
               className={cn(
-                "field relative z-0 w-full rounded-md border bg-[var(--clip-bg-elevated)] py-2.5 pl-10 pr-11",
+                // Avoid `.field` here: its `px-3` utility overrides `pl-10`/`pr-11`
+                // and collapses text onto the leading search icon.
+                "relative z-0 w-full rounded-md border bg-[var(--clip-bg-elevated)] py-2.5 pl-10 pr-11 text-sm",
                 "placeholder:text-[var(--clip-muted)]",
                 "transition-[border-color] duration-200",
                 "focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]",
