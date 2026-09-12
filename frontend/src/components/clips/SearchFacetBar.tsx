@@ -43,36 +43,38 @@ export function SearchFacetBar({ facets, active, onChange }: Props) {
   if (sections.length === 0) return null;
 
   return (
-    <div className="mb-5 space-y-3 border-b border-[var(--clip-border)] pb-4">
+    <div className="mb-5 space-y-3 border-b border-[var(--clip-border)] pb-4 md:space-y-3">
       {sections.map((cfg) => {
         const values = facets[cfg.facetKey] ?? [];
         const selected = active[cfg.key];
         return (
-          <div key={cfg.key} className="flex flex-wrap items-center gap-2">
-            <span className="w-20 shrink-0 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--clip-muted)]">
+          <div key={cfg.key} className="min-w-0">
+            <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--clip-muted)] md:mb-0 md:mr-2 md:inline md:w-20 md:shrink-0">
               {cfg.label}
             </span>
-            {values.map((value) => {
-              const isOn = selected === value;
-              return (
-                <m.button
-                  key={value}
-                  type="button"
-                  whileTap={reduced ? undefined : { scale: 0.98 }}
-                  transition={tweenMicro}
-                  onClick={() => onChange(cfg.key, isOn ? null : value)}
-                  aria-pressed={isOn}
-                  className={cn(
-                    "inline-flex min-h-8 max-w-[12rem] items-center truncate rounded-md border px-2.5 text-xs",
-                    isOn
-                      ? "border-[var(--clip-border-strong)] bg-[var(--clip-surface)] text-[var(--clip-fg)]"
-                      : "border-[var(--clip-border)] text-[var(--clip-muted)] hover:border-[var(--clip-border-strong)] hover:text-[var(--clip-fg)]",
-                  )}
-                >
-                  {value}
-                </m.button>
-              );
-            })}
+            <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden">
+              {values.map((value) => {
+                const isOn = selected === value;
+                return (
+                  <m.button
+                    key={value}
+                    type="button"
+                    whileTap={reduced ? undefined : { scale: 0.98 }}
+                    transition={tweenMicro}
+                    onClick={() => onChange(cfg.key, isOn ? null : value)}
+                    aria-pressed={isOn}
+                    className={cn(
+                      "inline-flex min-h-10 max-w-[12rem] shrink-0 items-center truncate rounded-md border px-3 text-xs md:min-h-8 md:px-2.5",
+                      isOn
+                        ? "border-[var(--clip-border-strong)] bg-[var(--clip-surface)] text-[var(--clip-fg)]"
+                        : "border-[var(--clip-border)] text-[var(--clip-muted)] hover:border-[var(--clip-border-strong)] hover:text-[var(--clip-fg)]",
+                    )}
+                  >
+                    {value}
+                  </m.button>
+                );
+              })}
+            </div>
           </div>
         );
       })}

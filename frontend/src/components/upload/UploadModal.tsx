@@ -25,6 +25,7 @@ import {
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { uploadClip } from "@/services/api";
 import { getApiErrorMessage } from "@/lib/api-client";
 
@@ -46,6 +47,7 @@ const MEDIA_ACCEPT =
 
 function UploadModal({ onClose, returnFocusRef }: Props) {
   const reducedMotion = useReducedMotion();
+  const isMobile = useIsMobile();
   const transition = motionTransition(reducedMotion, tweenSurface);
   const invalidateClips = useInvalidateClips();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -219,7 +221,12 @@ function UploadModal({ onClose, returnFocusRef }: Props) {
       <>
           <m.div
             key="upload-backdrop"
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+            className={cn(
+              "fixed inset-0 z-[100] bg-black/60",
+              isMobile
+                ? "flex items-end justify-center p-0"
+                : "flex items-center justify-center p-4",
+            )}
             variants={backdropVariants}
             initial="hidden"
             animate="visible"
@@ -234,14 +241,24 @@ function UploadModal({ onClose, returnFocusRef }: Props) {
               aria-modal="true"
               aria-labelledby="upload-modal-title"
               tabIndex={-1}
-              className="relative max-h-[90vh] w-full max-w-[900px] overflow-y-auto rounded-md border border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] p-6 outline-none"
-              variants={modalPanelVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
+              className={cn(
+                "relative w-full overflow-y-auto border border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] outline-none",
+                isMobile
+                  ? "max-h-[92dvh] rounded-t-2xl border-b-0 p-5 pb-safe"
+                  : "max-h-[90vh] max-w-[900px] rounded-md p-6",
+              )}
+              variants={isMobile ? undefined : modalPanelVariants}
+              initial={isMobile ? { y: "100%" } : "hidden"}
+              animate={isMobile ? { y: 0 } : "visible"}
+              exit={isMobile ? { y: "100%" } : "exit"}
               transition={transition}
               onClick={(e) => e.stopPropagation()}
             >
+              {isMobile ? (
+                <div className="mb-3 flex justify-center" aria-hidden>
+                  <span className="h-1 w-10 rounded-full bg-[var(--clip-border-strong)]" />
+                </div>
+              ) : null}
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-label">Upload</p>
@@ -251,7 +268,9 @@ function UploadModal({ onClose, returnFocusRef }: Props) {
                   <p className="mt-1 text-sm text-[var(--clip-muted)]">
                     {phase === "uploading"
                       ? "Upload in progress…"
-                      : "Add metadata, then upload to cloud storage"}
+                      : isMobile
+                        ? "Choose photos or videos from your phone"
+                        : "Add metadata, then upload to cloud storage"}
                   </p>
                 </div>
                 <button
@@ -259,7 +278,7 @@ function UploadModal({ onClose, returnFocusRef }: Props) {
                   type="button"
                   onClick={requestClose}
                   disabled={phase === "uploading"}
-                  className="rounded-md p-2 hover:bg-[var(--clip-surface)] disabled:opacity-40"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-[var(--clip-surface)] disabled:opacity-40"
                   aria-label="Close upload dialog"
                 >
                   <X size={20} />

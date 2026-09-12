@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useCoarsePointer } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 
 type MouseEnterContextValue = [
@@ -44,7 +45,8 @@ export function CardContainer({
   disabled: disabledProp,
 }: CardContainerProps) {
   const reducedMotion = useReducedMotion();
-  const disabled = disabledProp ?? reducedMotion;
+  const coarsePointer = useCoarsePointer();
+  const disabled = disabledProp ?? (reducedMotion || coarsePointer);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMouseEntered, setIsMouseEntered] = useState(false);
 

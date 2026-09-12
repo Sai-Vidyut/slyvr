@@ -135,6 +135,17 @@
     @apply rounded-md border border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] px-3 py-2.5 text-sm text-[var(--clip-fg)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)];
   }
 
+  /* Mobile app chrome — use sparingly, only where notches/home indicators matter */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   @keyframes landing-marquee {
     from {
       transform: translate3d(0, 0, 0);

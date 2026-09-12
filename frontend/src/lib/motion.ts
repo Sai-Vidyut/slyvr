@@ -86,6 +86,13 @@ export const drawerVariants: Variants = {
   exit: { x: "100%", opacity: 0.96 },
 };
 
+/** Full-screen / bottom sheet — mobile inspector & browse sheets */
+export const sheetUpVariants: Variants = {
+  hidden: { y: "100%", opacity: 0.98 },
+  visible: { y: 0, opacity: 1 },
+  exit: { y: "100%", opacity: 0.98 },
+};
+
 export const sidebarLeftVariants: Variants = {
   hidden: { x: "-100%" },
   visible: { x: 0 },

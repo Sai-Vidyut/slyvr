@@ -172,7 +172,7 @@ function ClipGrid({
               aria-busy={isFetching}
             >
               <LayoutGroup id="clip-library">
-                <div className="space-y-12">
+                <div className="space-y-8 md:space-y-12">
                   {Object.entries(sections).map(([title, sectionClips]) => {
                     if (sectionClips.length === 0) return null;
 
@@ -180,7 +180,7 @@ function ClipGrid({
                       <section key={title} aria-labelledby={`section-${title}`}>
                         <m.div
                           layout={useLayout}
-                          className="mb-4 flex items-baseline gap-3 border-b border-[var(--clip-border)] pb-2"
+                          className="mb-3 flex items-baseline gap-3 border-b border-[var(--clip-border)] pb-2 md:mb-4"
                         >
                           <h2
                             id={`section-${title}`}
@@ -198,7 +198,7 @@ function ClipGrid({
                           variants={staggerContainer(reduced, sectionClips.length)}
                           initial="hidden"
                           animate="visible"
-                          className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                          className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
                         >
                           <AnimatePresence mode="popLayout" initial={false}>
                             {sectionClips.map((clip, index) => (

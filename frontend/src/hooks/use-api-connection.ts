@@ -180,6 +180,8 @@ export function useApiConnection() {
     demoClips,
     demoCategories,
     demoPeople,
+    enterDemoMode,
+    exitDemoMode,
     apiButtonLabel: demoMode ? "Demo" : undefined,
   };
 }

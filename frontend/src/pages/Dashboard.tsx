@@ -11,6 +11,8 @@ import {
 } from "../components/clips/SearchFacetBar";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import { MobileBrowseSheet } from "../components/mobile/MobileBrowseSheet";
+import { MobileWorkspaceChrome } from "../components/mobile/MobileWorkspaceChrome";
 import UploadModal from "../components/upload/UploadModal";
 
 import { useApiConnection } from "@/hooks/use-api-connection";
@@ -21,6 +23,7 @@ import {
   usePeopleQuery,
   useSearchClipsQuery,
 } from "@/hooks/use-clips-queries";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { pageEnter } from "@/lib/motion";
 import { queryKeys } from "@/lib/query-keys";
@@ -43,6 +46,7 @@ function formatStorage(bytes: number) {
 function Dashboard() {
   const queryClient = useQueryClient();
   const reduced = useReducedMotion();
+  const isMobile = useIsMobile();
   const api = useApiConnection();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,6 +60,7 @@ function Dashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -232,6 +237,188 @@ function Dashboard() {
     });
   };
 
+  const filterChipRow =
+    hasFilters || isSearchActive ? (
+      <m.div
+        layout={!reduced}
+        className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        initial={reduced ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        {isSearchActive && (
+          <FilterChip
+            label={`Search: ${debouncedSearch.trim()}`}
+            onClear={() => {
+              setSearchQuery("");
+              setSearchFacets({});
+            }}
+          />
+        )}
+        {Object.entries(searchFacets).map(([key, value]) =>
+          value ? (
+            <FilterChip
+              key={key}
+              label={`${key}: ${value}`}
+              onClear={() => handleFacetChange(key as SearchFacetKey, null)}
+            />
+          ) : null,
+        )}
+        {hasCategoryFilter && (
+          <FilterChip
+            label={selectedCategory}
+            onClear={() => setSelectedCategory("All Clips")}
+          />
+        )}
+        {hasPersonFilter && (
+          <FilterChip
+            label={selectedPerson}
+            onClear={() => setSelectedPerson("All People")}
+          />
+        )}
+      </m.div>
+    ) : null;
+
+  const libraryBody = (
+    <>
+      {clipsError && (
+        <div
+          role="alert"
+          className="mb-4 border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-100"
+        >
+          Could not load clips. Confirm the API is running, then refresh
+          {isMobile
+            ? " — or open More and enter demo mode."
+            : " — or double-click the API control for demo mode."}
+        </div>
+      )}
+
+      {api.demoMode && (
+        <div
+          role="status"
+          className="mb-4 border border-sky-900/40 bg-sky-950/30 px-3 py-2 text-sm text-sky-100"
+        >
+          Demo mode is on. Showing sample clips
+          {api.demoClips.some((c) => c.id > 0)
+            ? " from your local API"
+            : ""}
+          .{" "}
+          {isMobile
+            ? "Long-press API or use More to exit."
+            : "Double-click the API control to exit."}
+        </div>
+      )}
+
+      {isSearchActive && !isLoading && (
+        <SearchFacetBar
+          facets={resultFacets}
+          active={searchFacets}
+          onChange={handleFacetChange}
+        />
+      )}
+
+      <ClipGrid
+        clips={filteredClips}
+        isLoading={isLoading}
+        isFetching={isFetchingClips && !isLoading}
+        filterSignature={filterSignature}
+        emptyKind={emptyKind as "none" | "filtered" | "search"}
+        filterLabel={filterLabel}
+        selectedClipId={selectedClipId}
+        onClearFilters={() => {
+          setSearchQuery("");
+          setSearchFacets({});
+          setSelectedCategory("All Clips");
+          setSelectedPerson("All People");
+        }}
+        onUpload={() => setUploadOpen(true)}
+        onClipClick={(clip) => {
+          drawerReturnFocusRef.current =
+            document.activeElement as HTMLElement | null;
+          setSelectedClipId(clip.id);
+          setDrawerOpen(true);
+        }}
+      />
+    </>
+  );
+
+  const sharedOverlays = (
+    <>
+      <ClipDetailsDrawer
+        clipId={selectedClipId}
+        clipOverride={selectedDemoClip}
+        isOpen={drawerOpen}
+        returnFocusRef={drawerReturnFocusRef}
+        onClose={() => {
+          setDrawerOpen(false);
+          setSelectedClipId(null);
+        }}
+      />
+
+      {uploadOpen && (
+        <UploadModal
+          returnFocusRef={uploadButtonRef}
+          onClose={() => setUploadOpen(false)}
+        />
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    const activeFilterSummary = hasCategoryFilter
+      ? selectedCategory
+      : hasPersonFilter
+        ? selectedPerson
+        : null;
+
+    return (
+      <>
+        <MobileWorkspaceChrome
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          isSearching={isSearching}
+          clipCount={allClipsForStats.length}
+          storageLabel={formatStorage(totalStorage)}
+          filterChips={filterChipRow}
+          apiVisualState={api.visualState}
+          apiStatusLabel={api.statusLabel}
+          apiTogglePending={api.isToggling}
+          apiCaption={api.apiButtonLabel}
+          demoMode={api.demoMode}
+          onApiToggle={() => api.toggle()}
+          onEnterDemo={() => void api.enterDemoMode()}
+          onExitDemo={() => api.exitDemoMode()}
+          onRefresh={handleRefresh}
+          isRefreshing={isFetchingClips}
+          onUpload={() => setUploadOpen(true)}
+          uploadButtonRef={uploadButtonRef}
+          browseOpen={browseOpen}
+          onBrowseOpenChange={setBrowseOpen}
+          activeFilterSummary={activeFilterSummary}
+        >
+          {libraryBody}
+        </MobileWorkspaceChrome>
+
+        <MobileBrowseSheet
+          open={browseOpen}
+          onClose={() => setBrowseOpen(false)}
+          categories={categories}
+          people={people}
+          selectedCategory={selectedCategory}
+          selectedPerson={selectedPerson}
+          onCategoryChange={setSelectedCategory}
+          onPersonChange={setSelectedPerson}
+          isLoading={
+            api.demoMode
+              ? false
+              : categoriesQuery.isLoading || peopleQuery.isLoading
+          }
+        />
+
+        {sharedOverlays}
+      </>
+    );
+  }
+
   return (
     <div className="flex h-[100dvh] bg-[var(--clip-bg)] text-[var(--clip-fg)]">
       <Sidebar
@@ -302,120 +489,14 @@ function Dashboard() {
             </div>
 
             {(hasFilters || isSearchActive) && (
-              <m.div
-                layout={!reduced}
-                className="mt-3 flex flex-wrap gap-2"
-                initial={reduced ? false : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                {isSearchActive && (
-                  <FilterChip
-                    label={`Search: ${debouncedSearch.trim()}`}
-                    onClear={() => {
-                      setSearchQuery("");
-                      setSearchFacets({});
-                    }}
-                  />
-                )}
-                {Object.entries(searchFacets).map(([key, value]) =>
-                  value ? (
-                    <FilterChip
-                      key={key}
-                      label={`${key}: ${value}`}
-                      onClear={() =>
-                        handleFacetChange(key as SearchFacetKey, null)
-                      }
-                    />
-                  ) : null,
-                )}
-                {hasCategoryFilter && (
-                  <FilterChip
-                    label={selectedCategory}
-                    onClear={() => setSelectedCategory("All Clips")}
-                  />
-                )}
-                {hasPersonFilter && (
-                  <FilterChip
-                    label={selectedPerson}
-                    onClear={() => setSelectedPerson("All People")}
-                  />
-                )}
-              </m.div>
+              <div className="mt-3">{filterChipRow}</div>
             )}
           </header>
 
-          {clipsError && (
-            <div
-              role="alert"
-              className="mb-4 border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-100"
-            >
-              Could not load clips. Confirm the API is running, then refresh —
-              or double-click the API control for demo mode.
-            </div>
-          )}
-
-          {api.demoMode && (
-            <div
-              role="status"
-              className="mb-4 border border-sky-900/40 bg-sky-950/30 px-3 py-2 text-sm text-sky-100"
-            >
-              Demo mode is on. Showing sample clips
-              {api.demoClips.some((c) => c.id > 0)
-                ? " from your local API"
-                : ""}
-              . Double-click the API control to exit.
-            </div>
-          )}
-
-          {isSearchActive && !isLoading && (
-            <SearchFacetBar
-              facets={resultFacets}
-              active={searchFacets}
-              onChange={handleFacetChange}
-            />
-          )}
-
-          <ClipGrid
-            clips={filteredClips}
-            isLoading={isLoading}
-            isFetching={isFetchingClips && !isLoading}
-            filterSignature={filterSignature}
-            emptyKind={emptyKind as "none" | "filtered" | "search"}
-            filterLabel={filterLabel}
-            selectedClipId={selectedClipId}
-            onClearFilters={() => {
-              setSearchQuery("");
-              setSearchFacets({});
-              setSelectedCategory("All Clips");
-              setSelectedPerson("All People");
-            }}
-            onUpload={() => setUploadOpen(true)}
-            onClipClick={(clip) => {
-              drawerReturnFocusRef.current =
-                document.activeElement as HTMLElement | null;
-              setSelectedClipId(clip.id);
-              setDrawerOpen(true);
-            }}
-          />
+          {libraryBody}
         </m.main>
 
-        <ClipDetailsDrawer
-          clipId={selectedClipId}
-          clipOverride={selectedDemoClip}
-          isOpen={drawerOpen}
-          returnFocusRef={drawerReturnFocusRef}
-          onClose={() => {
-            setDrawerOpen(false);
-            setSelectedClipId(null);
-          }}
-        />
-
-        {uploadOpen && (
-          <UploadModal
-            returnFocusRef={uploadButtonRef}
-            onClose={() => setUploadOpen(false)}
-          />
-        )}
+        {sharedOverlays}
       </div>
     </div>
   );
@@ -432,8 +513,9 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }) 
       whileHover={reduced ? undefined : { y: -1 }}
       transition={{ type: "tween", duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--clip-border)]",
+        "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border border-[var(--clip-border)]",
         "px-2.5 text-xs text-[var(--clip-muted)] hover:text-[var(--clip-fg)]",
+        "md:min-h-8",
       )}
     >
       <span className="max-w-[14rem] truncate">{label}</span>

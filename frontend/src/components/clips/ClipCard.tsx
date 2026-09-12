@@ -3,6 +3,7 @@ import { Film, Play } from "lucide-react";
 import { useState } from "react";
 
 import { CardBody, CardContainer, CardItem } from "@/components/ui/3d-card";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import {
   buttonTap,
@@ -41,9 +42,11 @@ function ClipCard({
   isSelected = false,
 }: ClipCardProps) {
   const reducedMotion = useReducedMotion();
+  const isMobile = useIsMobile();
   const [thumbFailed, setThumbFailed] = useState(false);
   const animateEntrance =
     !reducedMotion && shouldAnimateEntrance(listSize, index);
+  const touchUi = isMobile;
 
   const metaParts = [
     clip.category || "Uncategorized",
@@ -99,7 +102,12 @@ function ClipCard({
           )}
         >
           <CardItem translateZ={26} layer="media" className="w-full">
-            <div className="relative aspect-[16/10] overflow-hidden rounded-md bg-[var(--clip-surface)]">
+            <div
+              className={cn(
+                "relative overflow-hidden rounded-md bg-[var(--clip-surface)]",
+                touchUi ? "aspect-[4/5]" : "aspect-[16/10]",
+              )}
+            >
               <CardItem translateZ={14} layer="media" className="h-full w-full">
                 {showThumb ? (
                   <img
@@ -119,7 +127,12 @@ function ClipCard({
               </CardItem>
 
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/65 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/65 to-transparent transition-opacity duration-300",
+                  touchUi
+                    ? "opacity-80"
+                    : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+                )}
                 aria-hidden
               />
 
@@ -128,7 +141,9 @@ function ClipCard({
                   "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-200",
                   isSelected
                     ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+                    : touchUi
+                      ? "opacity-0"
+                      : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
                 )}
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-white/20 bg-black/45 text-white">
@@ -138,7 +153,7 @@ function ClipCard({
             </div>
           </CardItem>
 
-          <div className="space-y-1 pt-2.5">
+          <div className={cn("space-y-1", touchUi ? "pt-2" : "pt-2.5")}>
             <CardItem
               translateZ={18}
               as="h3"

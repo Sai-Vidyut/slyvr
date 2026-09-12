@@ -9,12 +9,14 @@ import { MotionButton } from "@/components/ui/motion-button";
 import { ShimmerBlock } from "@/components/ui/shimmer-skeleton";
 import { useCategoriesQuery, useClipQuery } from "@/hooks/use-clips-queries";
 import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import {
   backdropVariants,
   buttonTap,
   drawerVariants,
   motionTransition,
+  sheetUpVariants,
   tweenSurface,
   tweenUi,
 } from "@/lib/motion";
@@ -38,6 +40,7 @@ function ClipDetailsDrawer({
   returnFocusRef,
 }: Props) {
   const reducedMotion = useReducedMotion();
+  const isMobile = useIsMobile();
   const transition = motionTransition(reducedMotion, tweenSurface);
   const titleId = useId();
   const drawerRef = useRef<HTMLElement>(null);
@@ -107,21 +110,28 @@ function ClipDetailsDrawer({
             aria-labelledby={titleId}
             tabIndex={-1}
             className={cn(
-              "fixed inset-y-0 right-0 z-[70] flex w-full flex-col outline-none",
-              "border-l border-[var(--clip-border)] bg-[var(--clip-bg-elevated)]",
-              "md:w-[460px]",
+              "fixed z-[70] flex flex-col outline-none",
+              "border-[var(--clip-border)] bg-[var(--clip-bg-elevated)]",
+              isMobile
+                ? "inset-0 border-0"
+                : "inset-y-0 right-0 w-full border-l md:w-[460px]",
             )}
-            variants={drawerVariants}
+            variants={isMobile ? sheetUpVariants : drawerVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
             transition={transition}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] px-4 py-3 md:px-6">
+            <div
+              className={cn(
+                "sticky top-0 z-10 flex items-center justify-between border-b border-[var(--clip-border)] bg-[var(--clip-bg-elevated)] px-4 py-3 md:px-6",
+                isMobile && "pt-safe",
+              )}
+            >
               <div>
                 <p className="text-label">Details</p>
                 <h2 id={titleId} className="text-title mt-0.5">
-                  Clip inspector
+                  {isMobile ? "Clip" : "Clip inspector"}
                 </h2>
               </div>
               <m.button
@@ -129,14 +139,14 @@ function ClipDetailsDrawer({
                 type="button"
                 onClick={onClose}
                 whileTap={reducedMotion ? undefined : buttonTap}
-                className="rounded-md p-2 hover:bg-[var(--clip-surface)]"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-[var(--clip-surface)]"
                 aria-label="Close"
               >
                 <X size={20} />
               </m.button>
             </div>
 
-            <div className="flex flex-1 flex-col overflow-y-auto">
+            <div className="flex flex-1 flex-col overflow-y-auto pb-safe">
               {isLoading && (
                 <div className="space-y-4 p-4 md:p-6">
                   <ShimmerBlock className="aspect-video w-full rounded-md" />
