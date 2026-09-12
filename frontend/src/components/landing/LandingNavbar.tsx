@@ -82,45 +82,36 @@ export function LandingNavbar() {
           : "border-b border-transparent bg-[var(--clip-bg)]/60",
       )}
     >
-      <div className="mx-auto grid h-12 max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 md:h-14 md:px-8">
-        <div className="flex min-w-0 items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md md:hidden hover:bg-[var(--clip-surface)]"
-            aria-expanded={menuOpen}
-            aria-controls="landing-mobile-nav"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          <Link
-            to="/"
-            onClick={handleHomeClick}
-            aria-label="Slyvr home"
-            aria-current={pathname === "/" ? "page" : undefined}
-            className="text-[15px] font-medium tracking-[-0.02em] text-[var(--clip-fg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
-          >
-            Slyvr
-          </Link>
-        </div>
+      <div className="relative flex h-12 w-full items-center justify-between gap-3 px-4 md:h-14 md:px-8">
+        <Link
+          to="/"
+          onClick={handleHomeClick}
+          aria-label="Slyvr home"
+          aria-current={pathname === "/" ? "page" : undefined}
+          className="relative z-10 shrink-0 text-[15px] font-medium tracking-[-0.02em] text-[var(--clip-fg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
+        >
+          Slyvr
+        </Link>
 
-        <nav className="hidden items-center justify-center gap-8 md:flex" aria-label="Primary">
+        <nav
+          className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-8 md:flex"
+          aria-label="Primary"
+        >
           {NAV.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="text-[13px] text-[var(--clip-muted)] transition-colors hover:text-[var(--clip-fg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
+              className="pointer-events-auto text-[13px] text-[var(--clip-muted)] transition-colors hover:text-[var(--clip-fg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
             >
               {item.label}
             </a>
           ))}
         </nav>
 
-        <div className="flex shrink-0 items-center justify-end gap-4 sm:gap-5">
+        <div className="relative z-10 flex shrink-0 items-center justify-end gap-3 sm:gap-5">
           <Link
             to="/app"
-            className="hidden text-[13px] text-[var(--clip-muted)] hover:text-[var(--clip-fg)] sm:inline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
+            className="text-[13px] text-[var(--clip-muted)] hover:text-[var(--clip-fg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
           >
             Sign in
           </Link>
@@ -131,6 +122,16 @@ export function LandingNavbar() {
             Open library
             <ArrowRight size={14} aria-hidden />
           </Link>
+          <button
+            type="button"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md md:hidden hover:bg-[var(--clip-surface)]"
+            aria-expanded={menuOpen}
+            aria-controls="landing-mobile-nav"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
 
@@ -157,15 +158,6 @@ export function LandingNavbar() {
                   </a>
                 </li>
               ))}
-              <li className="mt-1 border-t border-[var(--clip-border)] pt-2">
-                <Link
-                  to="/app"
-                  onClick={closeMenu}
-                  className="flex min-h-11 items-center text-sm text-[var(--clip-muted)]"
-                >
-                  Sign in
-                </Link>
-              </li>
             </ul>
           </m.nav>
         )}
