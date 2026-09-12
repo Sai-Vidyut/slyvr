@@ -400,6 +400,8 @@ function Dashboard() {
   );
 
   // Unauthenticated visitors may only stay in demo mode.
+  // When ?demo=1, autoEnterDemo starts with isToggling=true so this guard
+  // waits for demo initialization instead of racing to /login.
   if (!session && !api.demoMode && !api.isToggling) {
     return <Navigate to="/login?next=%2Fapp" replace />;
   }

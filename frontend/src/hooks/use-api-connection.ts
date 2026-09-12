@@ -22,7 +22,9 @@ export function useApiConnection(options?: { autoEnterDemo?: boolean }) {
   const queryClient = useQueryClient();
   const autoEnterDemo = options?.autoEnterDemo ?? false;
   const [connectionEnabled, setConnectionEnabled] = useState(!autoEnterDemo);
-  const [isToggling, setIsToggling] = useState(false);
+  // Start toggling immediately when auto-entering demo so Dashboard's
+  // unauthenticated redirect cannot race ahead of enterDemoMode().
+  const [isToggling, setIsToggling] = useState(autoEnterDemo);
   const [demoMode, setDemoMode] = useState(false);
   const [demoClips, setDemoClips] = useState<Clip[]>([]);
   const [demoCategories, setDemoCategories] = useState<Category[]>([]);
