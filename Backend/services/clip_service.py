@@ -1,6 +1,6 @@
 from typing import List
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from fastapi import HTTPException
@@ -17,6 +17,7 @@ from models import (
 def get_all_clips(db: Session) -> List[Clip]:
     return (
         db.query(Clip)
+        .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .order_by(Clip.uploaded_at.desc())
         .all()
     )
@@ -28,6 +29,7 @@ def get_clip_by_id(
 ) -> Clip:
     clip = (
         db.query(Clip)
+        .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .filter(Clip.id == clip_id)
         .first()
     )
@@ -45,10 +47,12 @@ def search_clips(
     db: Session,
     query: str,
 ) -> List[Clip]:
+    """Legacy ILIKE search — prefer search_service.search_clips_ranked."""
     pattern = f"%{query}%"
 
     return (
         db.query(Clip)
+        .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .outerjoin(Category)
         .filter(
             or_(
