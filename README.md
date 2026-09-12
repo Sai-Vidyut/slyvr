@@ -1,83 +1,122 @@
-# Clip Management System
+# Slyvr
 
-A full-stack web application for uploading, organizing, searching, and managing video clips with cloud storage, metadata extraction, and thumbnail generation.
+Slyvr is a private video and photo library: upload media, organize with categories and people, search with relevance ranking, and inspect capture/device/location metadata.
 
-**Originally built:** March 2026  
-**Published to GitHub:** September 2026
-
----
-
-## Tech Stack
-
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS, TanStack Query, shadcn/ui |
-| **Backend** | FastAPI, SQLAlchemy, SQLite |
-| **Storage** | Azure Blob Storage |
-| **Media** | FFmpeg (thumbnails), ExifTool (metadata) |
+This repository is a reproducible checkpoint of the current working application (React + FastAPI).
 
 ---
 
-## Features
+## Tech stack
 
-- Upload, search, edit, and delete video clips
-- Category and people tagging with sidebar filtering
-- Automatic thumbnail generation and metadata extraction
-- Azure Blob Storage integration
+| Layer | Stack |
+|-------|--------|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, TanStack Query, Framer Motion, React Router |
+| Backend | FastAPI, SQLAlchemy, SQLite |
+| Storage | Azure Blob Storage |
+| Media tools | FFmpeg / ffprobe (thumbnails + video probe), ExifTool (EXIF / GPS) |
 
 ---
 
-## Project Structure
+## Capabilities (current)
+
+- Landing page (`/`) and workspace library (`/app`)
+- Upload videos and images with thumbnail generation
+- Server-side fuzzy / ranked search with contextual facets
+- Categories and people filters
+- Clip inspector with structured metadata sections
+- API Active / Off connection gate (health-backed)
+- Motion system (cards, drawers, modals, BorderBeam search, API status icon)
+
+---
+
+## Project structure
 
 ```text
-Clip-Management-System/
-├── Backend/       # FastAPI API, services, and routes
-├── frontend/      # React UI
+.
+├── Backend/           # FastAPI app, models, routes, services
+├── frontend/          # Vite React SPA
+├── docs/              # Architecture and status documentation
 └── README.md
 ```
 
 ---
 
-## Backend Setup
+## Local development
+
+### Backend
 
 ```bash
 cd Backend
-python -m venv venv
-source venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cp .env.example .env       # set AZURE_CONNECTION_STRING if using Azure
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-API docs: http://localhost:8000/docs
+- API: http://127.0.0.1:8000  
+- OpenAPI: http://127.0.0.1:8000/docs  
 
----
+Requires **ExifTool** and **FFmpeg/ffprobe** on `PATH` for full metadata/thumbnail behavior. Upload continues if metadata extraction fails.
 
-## Frontend Setup
+### Frontend
 
 ```bash
 cd frontend
 npm install
+cp .env.example .env       # optional; empty VITE_API_URL uses Vite proxy
 npm run dev
+```
+
+- App: http://localhost:5173  
+- Dev proxy: `/api` → `http://127.0.0.1:8000`
+
+### Build
+
+```bash
+cd frontend && npm run build
 ```
 
 ---
 
-## Development Timeline
+## Environment variables
 
-| Period | Milestone |
-|--------|-----------|
-| March 2026 | Full-stack development completed |
-| September 2026 | Published to GitHub |
+**Backend** (`Backend/.env` — never commit):
+
+| Variable | Purpose |
+|----------|---------|
+| `AZURE_CONNECTION_STRING` | Azure Blob Storage connection |
+| `AZURE_CONTAINER_NAME` | Optional container name (see azure service) |
+
+**Frontend** (`frontend/.env` — optional):
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_API_URL` | API base URL; leave empty in local dev to use `/api` proxy |
+
+---
+
+## Documentation
+
+| Doc | Contents |
+|-----|----------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Current system architecture |
+| [docs/FUTURE_ARCHITECTURE.md](docs/FUTURE_ARCHITECTURE.md) | Multi-device direction (not implemented) |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision records |
+| [docs/STATUS.md](docs/STATUS.md) | Working features and limitations |
+
+---
+
+## Current limitations
+
+- SQLite + in-process search (fine for personal libraries; not a distributed index)
+- Auth / multi-user accounts are not implemented
+- Reverse geocoding is not automatic (raw GPS only)
+- Azure Blob required for production-style uploads
+- No formal CI/CD or container deployment in-repo
 
 ---
 
 ## License
 
-This project is provided as-is. See Backend/README.md for API details.
-
-
-## Notes
-
-Built March 2026.
-
+Provided as-is for development and archival of the current Slyvr checkpoint.
