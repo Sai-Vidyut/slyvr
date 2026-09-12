@@ -21,14 +21,12 @@ from database import Base
 clip_people = Table(
     "clip_people",
     Base.metadata,
-
     Column(
         "clip_id",
         Integer,
         ForeignKey("clips.id"),
         primary_key=True,
     ),
-
     Column(
         "person_id",
         Integer,
@@ -110,25 +108,23 @@ class Clip(Base):
 
     thumbnail_url = Column(String(2048))
 
-    original_filename = Column(
-        String(255)
-    )
+    original_filename = Column(String(255))
 
-    stored_filename = Column(
-        String(255)
-    )
+    stored_filename = Column(String(255))
 
-    camera_model = Column(
-        String(255)
-    )
+    camera_model = Column(String(255))
+
+    camera_make = Column(String(255))
 
     latitude = Column(Float)
 
     longitude = Column(Float)
 
-    recorded_at = Column(
-        DateTime
-    )
+    altitude = Column(Float)
+
+    location_label = Column(String(512))
+
+    recorded_at = Column(DateTime)
 
     uploaded_at = Column(
         DateTime,
@@ -139,6 +135,16 @@ class Clip(Base):
         BigInteger,
         default=0,
     )
+
+    mime_type = Column(String(128))
+
+    width = Column(Integer)
+
+    height = Column(Integer)
+
+    duration_seconds = Column(Float)
+
+    metadata_json = Column(Text)
 
     category_rel = relationship(
         "Category",
