@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import Optional
 
 from database import SessionLocal
 
@@ -13,14 +14,16 @@ from models import (
 from services.clip_service import (
     get_all_clips,
     get_clip_by_id,
-    search_clips,
     get_categories,
     delete_clip,
 )
+from services.clip_serializer import serialize_clip, serialize_clips
+from services.search_service import search_clips_ranked
 
 from schemas.clip_schema import (
     ClipResponse,
     ClipListResponse,
+    SearchResponse,
     CategoryResponse,
     CreateCategoryRequest,
     PersonResponse,
@@ -56,84 +59,36 @@ def read_clips(
     db: Session = Depends(get_db),
 ):
     clips = get_all_clips(db)
-
-    formatted_clips = []
-
-    for clip in clips:
-        formatted_clips.append(
-            {
-                "id": clip.id,
-                "title": clip.title,
-                "description": clip.description,
-                "category": (
-                    clip.category_rel.name
-                    if clip.category_rel
-                    else None
-                ),
-                "people": [
-                    person.name
-                    for person in clip.people
-                ],
-                "blob_url": clip.blob_url,
-                "thumbnail_url": clip.thumbnail_url,
-                "original_filename": clip.original_filename,
-                "stored_filename": clip.stored_filename,
-                "camera_model": clip.camera_model,
-                "latitude": clip.latitude,
-                "longitude": clip.longitude,
-                "recorded_at": clip.recorded_at,
-                "uploaded_at": clip.uploaded_at,
-                "file_size": clip.file_size,
-            }
-        )
-
-    return {
-        "clips": formatted_clips
-    }
+    return {"clips": serialize_clips(clips)}
 
 
 @router.get(
     "/clips/search",
-    response_model=ClipListResponse,
+    response_model=SearchResponse,
 )
 def search(
-    q: str,
+    q: str = Query(""),
+    person: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    device: Optional[str] = Query(None),
+    year: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+    file_type: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    clips = search_clips(db, q)
-
-    formatted_clips = []
-
-    for clip in clips:
-        formatted_clips.append(
-            {
-                "id": clip.id,
-                "title": clip.title,
-                "description": clip.description,
-                "category": (
-                    clip.category_rel.name
-                    if clip.category_rel
-                    else None
-                ),
-                "people": [
-                    person.name
-                    for person in clip.people
-                ],
-                "blob_url": clip.blob_url,
-                "thumbnail_url": clip.thumbnail_url,
-                "original_filename": clip.original_filename,
-                "stored_filename": clip.stored_filename,
-                "camera_model": clip.camera_model,
-                "latitude": clip.latitude,
-                "longitude": clip.longitude,
-                "recorded_at": clip.recorded_at,
-                "uploaded_at": clip.uploaded_at,
-                "file_size": clip.file_size,
-            }
-        )
-
+    clips, facets = search_clips_ranked(
+        db,
+        q,
+        person=person,
+        category=category,
+        device=device,
+        year=year,
+        location=location,
+        file_type=file_type,
+    )
     return {
-        "clips": formatted_clips
+        "clips": serialize_clips(clips),
+        "facets": facets,
     }
 
 
@@ -145,7 +100,8 @@ def read_clip(
     clip_id: int,
     db: Session = Depends(get_db),
 ):
-    return get_clip_by_id(db, clip_id)
+    clip = get_clip_by_id(db, clip_id)
+    return serialize_clip(clip)
 
 
 @router.delete("/clips/{clip_id}")
@@ -192,6 +148,8 @@ def update_clip(
 
         if category:
             clip.category_id = category.id
+    else:
+        clip.category_id = None
 
     db.commit()
     db.refresh(clip)
@@ -348,4 +306,3 @@ def delete_person_by_name(
     return {
         "message": "Person deleted"
     }
-
