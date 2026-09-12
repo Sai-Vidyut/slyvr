@@ -19,6 +19,8 @@ type AuthContextValue = {
   accessToken: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  resendSignupConfirmation: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -73,6 +75,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Authentication is not configured");
+    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/login`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+  }, []);
+
+  const resendSignupConfirmation = useCallback(async (email: string) => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Authentication is not configured");
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -89,9 +106,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessToken: session?.access_token ?? null,
       signIn,
       signUp,
+      requestPasswordReset,
+      resendSignupConfirmation,
       signOut,
     }),
-    [loading, session, signIn, signOut, signUp],
+    [
+      loading,
+      requestPasswordReset,
+      resendSignupConfirmation,
+      session,
+      signIn,
+      signOut,
+      signUp,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
