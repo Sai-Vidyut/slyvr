@@ -8,6 +8,13 @@ import type {
   SearchResponse,
   UpdateClipPayload,
 } from "@/types/clip";
+import type {
+  CreateWorkspaceResponse,
+  JoinCodeResponse,
+  LibrarySummary,
+  MeResponse,
+  WorkspaceResponse,
+} from "@/types/library";
 import { apiClient } from "@/lib/api-client";
 
 export const getClips = async (): Promise<ClipListResponse> => {
@@ -98,5 +105,49 @@ export const uploadClip = (
       onUploadProgress(percent);
     },
   });
+
+export const getMe = async (): Promise<MeResponse> => {
+  const response = await apiClient.get<MeResponse>("/me");
+  return response.data;
+};
+
+export const getMyLibraries = async (): Promise<LibrarySummary[]> => {
+  const response = await apiClient.get<LibrarySummary[]>("/me/libraries");
+  return response.data;
+};
+
+export const createWorkspace = async (
+  name: string,
+): Promise<CreateWorkspaceResponse> => {
+  const response = await apiClient.post<CreateWorkspaceResponse>("/workspaces", {
+    name,
+  });
+  return response.data;
+};
+
+export const joinWorkspace = async (code: string): Promise<WorkspaceResponse> => {
+  const response = await apiClient.post<WorkspaceResponse>("/workspaces/join", {
+    code,
+  });
+  return response.data;
+};
+
+export const regenerateJoinCode = async (
+  workspaceId: number,
+): Promise<JoinCodeResponse> => {
+  const response = await apiClient.post<JoinCodeResponse>(
+    `/workspaces/${workspaceId}/join-code/regenerate`,
+  );
+  return response.data;
+};
+
+export const revokeJoinCode = async (
+  workspaceId: number,
+): Promise<JoinCodeResponse> => {
+  const response = await apiClient.post<JoinCodeResponse>(
+    `/workspaces/${workspaceId}/join-code/revoke`,
+  );
+  return response.data;
+};
 
 export default apiClient;

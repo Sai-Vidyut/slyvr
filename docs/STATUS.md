@@ -7,54 +7,45 @@ Checkpoint of what the repository implements **today**.
 ## Working
 
 - Landing page at `/` (hero, product story, scroll sections)
-- Workspace at `/app` (sidebar, topbar, grid, drawer, upload modal)
-- Clip CRUD (list, detail, update title/description/category, delete)
-- Categories and people create/list/delete + sidebar filters
-- Upload of video and image files with Azure persistence
+- Auth UI at `/login` and `/signup` (Supabase email/password)
+- Protected workspace at `/app` (requires session) + public demo via `/app?demo=1`
+- Personal libraries + shared workspaces with join codes
+- Library switcher (desktop + mobile)
+- Clip CRUD scoped to the active authorized library
+- Categories and people scoped per library (`UNIQUE(library_id, name)`)
+- Upload with server-side `uploaded_by_user_id` from JWT (not client-spoofable)
 - Thumbnail generation (FFmpeg for video; image copy for stills)
 - Metadata extraction (ExifTool + ffprobe) into columns + `metadata_json`
-- Clip inspector metadata sections (file / capture / location / video)
-- Server-side ranked search (`GET /clips/search`) with typo/token tolerance
-- Person- and category-aware search
-- Contextual search facets (people, categories, devices, years, locations, types)
-- Debounced search UX + BorderBeam on focus/active query
+- Server-side ranked search with library scoping
 - API Active/Off control with health check and query gating
-- ApiStatusIcon path animation (respects reduced motion)
-- 3D media card hover tilt
-- Shared motion language (drawers, modals, buttons, toasts)
-- React Query caching and mutation toasts
-- Dialog focus management
-- SQLite schema ensure + nullable column migration helper
+- Static production demo mode (frontend-only, read-only, no private API)
+- React Query caching keyed by `libraryId`
+- SQLite schema ensure + additive migrations (including auth tables + legacy backfill)
 - Vite `/api` proxy for local development
+- GitHub Pages deploy under `/slyvr/`
 
 ---
 
 ## Known limitations
 
-- No user accounts or API authentication
-- CORS allows all origins
-- Search/scoring is in-process over SQLite candidates (not a dedicated search engine)
+- Supabase is identity-only; media DB remains local SQLite
+- Legacy/development library access is env-gated (`SLYVR_LEGACY_LIBRARY_ACCESS`) and hidden from production switchers
+- CORS must be allowlisted (no `*`) when auth is enabled
+- Search/scoring is in-process over SQLite candidates
 - Metadata/thumbnail work is synchronous on the upload request
-- No reverse geocoding service (raw GPS + optional OSM link only)
-- Azure Blob required for uploads; no local disk storage backend
-- No Docker/CI/production deploy configs in-repo
-- Large synthetic libraries stress grid layout animations
-- Upload form field still named `video` for historical reasons
-- Legacy `exif_service.py` remains alongside `metadata_service.py`
+- Azure Blob required for uploads
+- Google OAuth not in MVP
+- No conversational AI search yet
 
 ---
 
 ## Not yet implemented
 
-(See also [FUTURE_ARCHITECTURE.md](./FUTURE_ARCHITECTURE.md).)
-
-- Multi-device / phone ingest agents
-- API keys / OAuth
+- Conversational AI / Gemini / Groq search intents
+- Google OAuth
 - Async job queue / background workers
 - Resumable chunked uploads
 - Deduplication
 - Dedicated search index
-- Multi-user libraries / sharing
-- Automatic reverse geocoding
 - Formal Alembic migration history
-- End-to-end automated test suite for search/upload
+- Clip ownership transfer

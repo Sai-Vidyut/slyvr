@@ -56,9 +56,9 @@ function LandingPage() {
               Your library belongs to you.
             </h2>
             <p className="text-meta mt-10 max-w-md leading-relaxed">
-              Personal collections — not public feeds or shared analytics. One account&apos;s clips
-              are not shown in another&apos;s library. Sign-in is still being built; we&apos;re not
-              claiming bank-grade security, only a clear product rule.
+              Personal collections and shared workspaces — not public feeds. Sign in for your
+              private library, or try the demo without an account. One account&apos;s clips are never
+              shown in another&apos;s library.
             </p>
           </m.div>
         </section>
@@ -99,7 +99,7 @@ function LandingPage() {
                 <h3 className="mt-2 text-lg font-medium">Bring your own Azure Storage</h3>
                 <p className="text-meta mt-3 max-w-sm leading-relaxed">
                   Keep files in a container you control. Slyvr would index metadata and stream from
-                  your account — connection flow on the roadmap, not available today.
+                  your account. Demo mode stays available without signing in.
                 </p>
               </m.article>
             </div>

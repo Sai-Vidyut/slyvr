@@ -1,6 +1,6 @@
 import { AnimatePresence, m } from "framer-motion";
 import { Menu, RefreshCw, Search, Upload, X } from "lucide-react";
-import { type RefObject, useState } from "react";
+import { type ReactNode, type RefObject, useState } from "react";
 
 import { SlyvrBrandLink } from "@/components/layout/SlyvrBrandLink";
 import {
@@ -27,6 +27,8 @@ export interface TopbarProps {
   apiTogglePending?: boolean;
   apiButtonCaption?: string;
   onApiToggle?: () => void;
+  librarySwitcher?: ReactNode;
+  uploadDisabled?: boolean;
 }
 
 function ApiStatusControl({
@@ -112,6 +114,8 @@ function Topbar({
   apiTogglePending = false,
   apiButtonCaption,
   onApiToggle,
+  librarySwitcher,
+  uploadDisabled = false,
 }: TopbarProps) {
   const [focused, setFocused] = useState(false);
   const reduced = useReducedMotion();
@@ -212,6 +216,8 @@ function Topbar({
         </div>
 
         <div className="ml-1 flex items-center gap-2">
+          {librarySwitcher}
+
           <ApiStatusControl
             visualState={apiVisualState}
             statusLabel={apiStatusLabel}
@@ -239,9 +245,10 @@ function Topbar({
             ref={uploadButtonRef}
             type="button"
             onClick={onUpload}
-            whileHover={reduced ? undefined : buttonHover}
-            whileTap={reduced ? undefined : buttonTap}
-            className="flex min-h-10 items-center gap-2 rounded-md bg-[var(--clip-accent)] px-3.5 text-sm font-medium text-[var(--clip-accent-fg)]"
+            disabled={uploadDisabled}
+            whileHover={reduced || uploadDisabled ? undefined : buttonHover}
+            whileTap={reduced || uploadDisabled ? undefined : buttonTap}
+            className="flex min-h-10 items-center gap-2 rounded-md bg-[var(--clip-accent)] px-3.5 text-sm font-medium text-[var(--clip-accent-fg)] disabled:opacity-45"
             aria-label="Upload clips"
           >
             <Upload size={17} aria-hidden />

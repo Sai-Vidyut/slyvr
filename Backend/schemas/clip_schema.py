@@ -4,10 +4,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-# --------------------
-# PEOPLE
-# --------------------
-
 class PersonResponse(BaseModel):
     id: int
     name: str
@@ -19,10 +15,6 @@ class PersonResponse(BaseModel):
 class CreatePersonRequest(BaseModel):
     name: str
 
-
-# --------------------
-# CATEGORIES
-# --------------------
 
 class CategoryResponse(BaseModel):
     id: int
@@ -36,12 +28,15 @@ class CreateCategoryRequest(BaseModel):
     name: str
 
 
-# --------------------
-# CLIPS
-# --------------------
+class UploaderInfo(BaseModel):
+    id: str
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+
 
 class ClipResponse(BaseModel):
     id: int
+    library_id: Optional[int] = None
     title: str
     description: Optional[str] = None
     category: Optional[str] = None
@@ -57,6 +52,7 @@ class ClipResponse(BaseModel):
     location_label: Optional[str] = None
     recorded_at: Optional[datetime] = None
     uploaded_at: Optional[datetime] = None
+    uploaded_by: Optional[UploaderInfo] = None
     file_size: Optional[int] = 0
     mime_type: Optional[str] = None
     width: Optional[int] = None
@@ -87,3 +83,60 @@ class SearchFacets(BaseModel):
 class SearchResponse(BaseModel):
     clips: List[ClipResponse]
     facets: Dict[str, List[str]] = Field(default_factory=dict)
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class LibrarySummary(BaseModel):
+    id: int
+    type: str
+    name: str
+    workspace_id: Optional[int] = None
+    role: str
+
+
+class MeResponse(BaseModel):
+    user: UserResponse
+    libraries: List[LibrarySummary]
+    active_library: LibrarySummary
+
+
+class CreateWorkspaceRequest(BaseModel):
+    name: str
+
+
+class JoinWorkspaceRequest(BaseModel):
+    code: str
+
+
+class WorkspaceResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    library_id: int
+    role: str
+    join_code_prefix: Optional[str] = None
+    join_code_active: bool = False
+
+
+class CreateWorkspaceResponse(WorkspaceResponse):
+    join_code: str
+
+
+class JoinCodeResponse(BaseModel):
+    join_code: Optional[str] = None
+    join_code_prefix: Optional[str] = None
+    join_code_active: bool = False
+
+
+class WorkspaceMemberResponse(BaseModel):
+    user_id: str
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    role: str
+    joined_at: Optional[datetime] = None

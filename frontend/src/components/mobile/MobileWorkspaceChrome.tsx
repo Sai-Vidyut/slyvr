@@ -53,6 +53,8 @@ type MobileWorkspaceChromeProps = {
   browseOpen: boolean;
   onBrowseOpenChange: (open: boolean) => void;
   activeFilterSummary?: string | null;
+  librarySwitcher?: ReactNode;
+  libraryTitle?: string;
 };
 
 export function MobileWorkspaceChrome({
@@ -79,6 +81,8 @@ export function MobileWorkspaceChrome({
   browseOpen,
   onBrowseOpenChange,
   activeFilterSummary,
+  librarySwitcher,
+  libraryTitle = "Library",
 }: MobileWorkspaceChromeProps) {
   const reduced = useReducedMotion();
   const [focused, setFocused] = useState(false);
@@ -134,11 +138,13 @@ export function MobileWorkspaceChrome({
           <div className="min-w-0">
             <p className="text-label leading-none">Slyvr</p>
             <p className="mt-1 truncate text-sm font-medium tracking-tight">
-              Library
+              {libraryTitle}
             </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
+            {librarySwitcher}
+
             <m.button
               type="button"
               disabled={apiTogglePending}

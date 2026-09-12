@@ -1,8 +1,6 @@
 import type { Category, Clip, Person } from "@/types/clip";
 import { LANDING_CLIPS } from "@/lib/landing-clips";
 
-const LOCAL_API = "http://127.0.0.1:8000";
-
 function parseDurationSeconds(label: string): number {
   const parts = label.split(":").map((p) => Number(p));
   if (parts.length === 2 && parts.every((n) => Number.isFinite(n))) {
@@ -61,6 +59,8 @@ export type DemoLibrary = {
   source: "localhost" | "static";
 };
 
+const LOCAL_API = "http://127.0.0.1:8000";
+
 async function fetchJson<T>(path: string, timeoutMs = 700): Promise<T | null> {
   try {
     const response = await fetch(`${LOCAL_API}${path}`, {
@@ -74,10 +74,20 @@ async function fetchJson<T>(path: string, timeoutMs = 700): Promise<T | null> {
 }
 
 /**
- * Prefer live clips from the local FastAPI (same data you see on localhost).
- * Fall back to a static sample library when the local API is offline.
+ * Production: always static, read-only sample data (never authenticated APIs).
+ * Local/dev: optionally prefer unreachable-auth localhost only when not in PROD.
  */
 export async function resolveDemoLibrary(): Promise<DemoLibrary> {
+  if (import.meta.env.PROD) {
+    return {
+      clips: STATIC_DEMO_CLIPS,
+      categories: STATIC_DEMO_CATEGORIES,
+      people: STATIC_DEMO_PEOPLE,
+      source: "static",
+    };
+  }
+
+  // Dev-only: try unauthenticated local API. If auth is required (401), fall back to static.
   const clipsPayload = await fetchJson<{ clips: Clip[] }>("/clips");
   if (clipsPayload?.clips?.length) {
     const [categories, people] = await Promise.all([

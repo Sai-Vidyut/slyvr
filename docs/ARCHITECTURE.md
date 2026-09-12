@@ -15,7 +15,7 @@ Slyvr is a **private media library** for personal video and photo archives. User
 5. Open a clip inspector to edit fields and view extracted metadata
 6. Optionally disconnect the API via the top-bar Active/Off control
 
-There is **no user authentication** in the current implementation. Privacy is “single-operator / local or privately hosted API,” not multi-tenant SaaS.
+There is **Supabase Auth** for identity. Media remains on FastAPI + SQLite + Azure. Privacy is enforced server-side via JWT verification and library/workspace membership — not by trusting the client.
 
 ---
 
@@ -70,7 +70,8 @@ flowchart TB
 | Path | Component | Notes |
 |------|-----------|--------|
 | `/` | `LandingPage` | Eager-loaded |
-| `/app` | `Dashboard` | Lazy-loaded via `React.lazy` |
+| `/login`, `/signup` | `AuthPage` | Supabase email/password |
+| `/app` | `Dashboard` | Lazy-loaded; requires session unless `?demo=1` |
 | `*` | Navigate → `/` | |
 
 Entrypoint: `frontend/src/main.tsx` → `AppProviders` → `App`.
@@ -382,12 +383,12 @@ No Redux / Zustand. Landing uses local motion + scroll hooks.
 
 ## 17. Security / privacy
 
-- **Secrets:** `AZURE_CONNECTION_STRING` in `Backend/.env` (gitignored). Never commit `.env`.  
-- **CORS:** currently `*`.  
-- **Auth:** none. Anyone who can reach the API can read/write library data.  
+- **Secrets:** `AZURE_CONNECTION_STRING`, `SUPABASE_JWT_SECRET` in `Backend/.env` (gitignored). Frontend may use public `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` only.  
+- **CORS:** explicit allowlist (not `*`).  
+- **Auth:** Bearer Supabase JWT; active library via `X-Library-Id` verified server-side.  
 - **GPS:** stored as raw coordinates; no third-party geocoder; OSM link is client-side only.  
-- **Uploads:** original bytes preserved; temp files deleted after success/failure.  
-- **Public exposure:** treat Azure URLs and API as private infrastructure.
+- **Uploads:** original bytes preserved; temp files deleted after success/failure; `uploaded_by_user_id` from JWT only.  
+- **Public exposure:** treat Azure URLs and API as private infrastructure; demo is static frontend-only.
 
 ---
 

@@ -92,8 +92,23 @@ Decisions evidenced by the **current** Slyvr codebase. Inferred items are labele
 
 ---
 
-### No authentication *(inferred)*
+### No authentication *(superseded)*
 
-**Decision:** Open API within the deployment network.  
-**Why:** Current product stage is single-operator library.  
-**Consequence:** Must not expose the API publicly without adding auth.
+**Decision (historical):** Open API within the deployment network for single-operator use.  
+**Update:** Supabase Auth JWT verification + library/workspace authorization is now required for protected media APIs. Demo remains unauthenticated and frontend-only.
+
+---
+
+### Unified Library abstraction
+
+**Decision:** Personal and workspace media share one `libraries` table (`personal` | `workspace` | `legacy`).  
+**Why:** One active media context for clips, search, categories, and future AI.  
+**Consequence:** Every clip query is scoped by verified `library_id`; uploader is separate from library ownership.
+
+---
+
+### Supabase as identity provider only
+
+**Decision:** Use Supabase Auth for signup/login/session; keep SQLite + Azure for media.  
+**Why:** Avoid migrating the media database; ship auth quickly.  
+**Consequence:** FastAPI verifies JWTs and mirrors users into a local `users` table.

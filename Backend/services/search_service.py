@@ -135,7 +135,9 @@ def _score_clip(clip: Clip, query: str, tokens: List[str]) -> float:
     return score
 
 
-def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
+def _candidate_clips(
+    db: Session, tokens: List[str], query: str, library_id: int
+) -> List[Clip]:
     if not tokens:
         return []
 
@@ -160,6 +162,7 @@ def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
         db.query(Clip)
         .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .outerjoin(Category, Clip.category_id == Category.id)
+        .filter(Clip.library_id == library_id)
         .filter(or_(*clauses))
         .all()
     )
@@ -168,6 +171,7 @@ def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
         db.query(Clip)
         .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .join(Clip.people)
+        .filter(Clip.library_id == library_id)
         .filter(or_(*[Person.name.ilike(f"%{token}%") for token in tokens]))
         .all()
     )
@@ -178,11 +182,14 @@ def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
     return list(by_id.values())
 
 
-def _typo_fallback_candidates(db: Session, query: str, tokens: List[str]) -> List[Clip]:
+def _typo_fallback_candidates(
+    db: Session, query: str, tokens: List[str], library_id: int
+) -> List[Clip]:
     """When SQL ILIKE misses (typos), scan recent titles with fuzzy matching only."""
     recent = (
         db.query(Clip)
         .options(joinedload(Clip.category_rel), joinedload(Clip.people))
+        .filter(Clip.library_id == library_id)
         .order_by(Clip.uploaded_at.desc())
         .limit(800)
         .all()
@@ -325,6 +332,7 @@ def search_clips_ranked(
     db: Session,
     query: str,
     *,
+    library_id: int,
     person: Optional[str] = None,
     category: Optional[str] = None,
     device: Optional[str] = None,
@@ -344,9 +352,9 @@ def search_clips_ranked(
         tokens = [q.lower()]
 
     if q:
-        candidates = _candidate_clips(db, tokens, q)
+        candidates = _candidate_clips(db, tokens, q, library_id)
         if not candidates:
-            candidates = _typo_fallback_candidates(db, q, tokens)
+            candidates = _typo_fallback_candidates(db, q, tokens, library_id)
         scored = [(clip, _score_clip(clip, q, tokens)) for clip in candidates]
         scored = [(clip, score) for clip, score in scored if score >= 40]
         scored.sort(key=lambda item: item[1], reverse=True)
@@ -355,6 +363,7 @@ def search_clips_ranked(
         ranked = (
             db.query(Clip)
             .options(joinedload(Clip.category_rel), joinedload(Clip.people))
+            .filter(Clip.library_id == library_id)
             .order_by(Clip.uploaded_at.desc())
             .limit(limit)
             .all()

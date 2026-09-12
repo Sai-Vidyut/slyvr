@@ -8,6 +8,7 @@ import { motionToast as toast } from "@/components/ui/motion-toast";
 
 import { queryKeys } from "@/lib/query-keys";
 import { getApiErrorMessage } from "@/lib/api-client";
+import { useLibrary } from "@/providers/library-provider";
 import type { UpdateClipPayload, SearchParams } from "@/types/clip";
 import {
   createCategory,
@@ -25,31 +26,35 @@ import {
 } from "@/services/api";
 
 export function useCategoriesQuery(enabled = true) {
+  const { activeLibraryId } = useLibrary();
   return useQuery({
-    queryKey: queryKeys.categories.all,
+    queryKey: queryKeys.categories.all(activeLibraryId),
     queryFn: getCategories,
-    enabled,
+    enabled: enabled && activeLibraryId != null,
   });
 }
 
 export function usePeopleQuery(enabled = true) {
+  const { activeLibraryId } = useLibrary();
   return useQuery({
-    queryKey: queryKeys.people.all,
+    queryKey: queryKeys.people.all(activeLibraryId),
     queryFn: getPeople,
-    enabled,
+    enabled: enabled && activeLibraryId != null,
   });
 }
 
 export function useClipsQuery(enabled = true) {
+  const { activeLibraryId } = useLibrary();
   return useQuery({
-    queryKey: queryKeys.clips.all,
+    queryKey: queryKeys.clips.all(activeLibraryId),
     queryFn: getClips,
-    enabled,
+    enabled: enabled && activeLibraryId != null,
     select: (data) => data.clips,
   });
 }
 
 export function useSearchClipsQuery(params: SearchParams, enabled: boolean) {
+  const { activeLibraryId } = useLibrary();
   const keyParams = {
     q: params.q,
     person: params.person ?? "",
@@ -60,17 +65,18 @@ export function useSearchClipsQuery(params: SearchParams, enabled: boolean) {
     file_type: params.file_type ?? "",
   };
   return useQuery({
-    queryKey: queryKeys.clips.search(keyParams),
+    queryKey: queryKeys.clips.search(activeLibraryId, keyParams),
     queryFn: () => searchClips(params),
-    enabled: enabled && params.q.trim().length > 0,
+    enabled: enabled && activeLibraryId != null && params.q.trim().length > 0,
   });
 }
 
 export function useClipQuery(clipId: number | null, enabled: boolean) {
+  const { activeLibraryId } = useLibrary();
   return useQuery({
-    queryKey: queryKeys.clips.detail(clipId ?? 0),
+    queryKey: queryKeys.clips.detail(activeLibraryId, clipId ?? 0),
     queryFn: () => getClipById(clipId!),
-    enabled: enabled && clipId != null,
+    enabled: enabled && activeLibraryId != null && clipId != null,
     retry: (count, error) => {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         return false;
@@ -94,12 +100,15 @@ export function useHealthQuery(enabled = true) {
 
 export function useUpdateClipMutation() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: UpdateClipPayload }) =>
       updateClip(id, data),
     onSuccess: (_data, { id }) => {
-      void qc.invalidateQueries({ queryKey: queryKeys.clips.all });
-      void qc.invalidateQueries({ queryKey: queryKeys.clips.detail(id) });
+      void qc.invalidateQueries({ queryKey: queryKeys.clips.all(activeLibraryId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.clips.detail(activeLibraryId, id),
+      });
       toast.success("Clip saved");
     },
     onError: (error) => {
@@ -110,11 +119,14 @@ export function useUpdateClipMutation() {
 
 export function useDeleteClipMutation() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return useMutation({
     mutationFn: (id: number) => deleteClip(id),
     onSuccess: (_data, id) => {
-      qc.removeQueries({ queryKey: queryKeys.clips.detail(id) });
-      void qc.invalidateQueries({ queryKey: queryKeys.clips.all });
+      qc.removeQueries({
+        queryKey: queryKeys.clips.detail(activeLibraryId, id),
+      });
+      void qc.invalidateQueries({ queryKey: queryKeys.clips.all(activeLibraryId) });
       toast.success("Clip deleted");
     },
     onError: (error) => {
@@ -125,10 +137,13 @@ export function useDeleteClipMutation() {
 
 export function useCreateCategoryMutation() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return useMutation({
     mutationFn: createCategory,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.categories.all });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.categories.all(activeLibraryId),
+      });
       toast.success("Category created");
     },
     onError: (error) => toast.error(getApiErrorMessage(error)),
@@ -137,11 +152,14 @@ export function useCreateCategoryMutation() {
 
 export function useDeleteCategoryMutation() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return useMutation({
     mutationFn: deleteCategory,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.categories.all });
-      void qc.invalidateQueries({ queryKey: queryKeys.clips.all });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.categories.all(activeLibraryId),
+      });
+      void qc.invalidateQueries({ queryKey: queryKeys.clips.all(activeLibraryId) });
       toast.success("Category deleted");
     },
     onError: (error) => toast.error(getApiErrorMessage(error)),
@@ -150,10 +168,11 @@ export function useDeleteCategoryMutation() {
 
 export function useCreatePersonMutation() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return useMutation({
     mutationFn: createPerson,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.people.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.people.all(activeLibraryId) });
       toast.success("Person added");
     },
     onError: (error) => toast.error(getApiErrorMessage(error)),
@@ -162,11 +181,12 @@ export function useCreatePersonMutation() {
 
 export function useDeletePersonMutation() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return useMutation({
     mutationFn: deletePerson,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.people.all });
-      void qc.invalidateQueries({ queryKey: queryKeys.clips.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.people.all(activeLibraryId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.clips.all(activeLibraryId) });
       toast.success("Person removed");
     },
     onError: (error) => toast.error(getApiErrorMessage(error)),
@@ -175,7 +195,8 @@ export function useDeletePersonMutation() {
 
 export function useInvalidateClips() {
   const qc = useQueryClient();
+  const { activeLibraryId } = useLibrary();
   return () => {
-    void qc.invalidateQueries({ queryKey: queryKeys.clips.all });
+    void qc.invalidateQueries({ queryKey: queryKeys.clips.all(activeLibraryId) });
   };
 }

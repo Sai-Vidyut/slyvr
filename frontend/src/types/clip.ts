@@ -62,6 +62,7 @@ export interface ClipMetadata {
 
 export interface Clip {
   id: number;
+  library_id?: number | null;
   title: string;
   description?: string | null;
   category?: string | null;
@@ -77,6 +78,11 @@ export interface Clip {
   location_label?: string | null;
   recorded_at?: string | null;
   uploaded_at?: string | null;
+  uploaded_by?: {
+    id: string;
+    display_name?: string | null;
+    email?: string | null;
+  } | null;
   file_size?: number | null;
   mime_type?: string | null;
   width?: number | null;

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { motionToast as toast } from "@/components/ui/motion-toast";
 import type { ApiStatusVisualState } from "@/components/ui/api-status-icon";
@@ -16,17 +16,19 @@ const DOUBLE_CLICK_MS = 320;
  * User-controlled API connection gate. Health check remains the source of truth
  * for whether the backend is actually reachable when connection is enabled.
  *
- * Double-click the API control to enter demo mode (localhost clips when available).
+ * Double-click the API control to enter demo mode (static sample in production).
  */
-export function useApiConnection() {
+export function useApiConnection(options?: { autoEnterDemo?: boolean }) {
   const queryClient = useQueryClient();
-  const [connectionEnabled, setConnectionEnabled] = useState(true);
+  const autoEnterDemo = options?.autoEnterDemo ?? false;
+  const [connectionEnabled, setConnectionEnabled] = useState(!autoEnterDemo);
   const [isToggling, setIsToggling] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [demoClips, setDemoClips] = useState<Clip[]>([]);
   const [demoCategories, setDemoCategories] = useState<Category[]>([]);
   const [demoPeople, setDemoPeople] = useState<Person[]>([]);
   const singleClickTimerRef = useRef<number | null>(null);
+  const autoDemoStarted = useRef(false);
 
   const health = useHealthQuery(connectionEnabled && !demoMode);
 
@@ -104,6 +106,12 @@ export function useApiConnection() {
       setIsToggling(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!autoEnterDemo || autoDemoStarted.current || demoMode) return;
+    autoDemoStarted.current = true;
+    void enterDemoMode();
+  }, [autoEnterDemo, demoMode, enterDemoMode]);
 
   const runSingleToggle = useCallback(async () => {
     if (isToggling) return;
