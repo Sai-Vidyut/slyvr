@@ -83,7 +83,7 @@ function Dashboard() {
     ],
   );
 
-  const apiQueriesEnabled = api.connectionEnabled;
+  const apiQueriesEnabled = api.connectionEnabled && !api.demoMode;
   const categoriesQuery = useCategoriesQuery(apiQueriesEnabled);
   const peopleQuery = usePeopleQuery(apiQueriesEnabled);
   const clipsQuery = useClipsQuery(apiQueriesEnabled && !isSearchActive);
@@ -92,22 +92,53 @@ function Dashboard() {
     apiQueriesEnabled && isSearchActive,
   );
 
-  const categories = useMemo(
-    () => categoriesQuery.data?.map((c) => c.name) ?? [],
-    [categoriesQuery.data],
-  );
-  const people = useMemo(
-    () => peopleQuery.data?.map((p) => p.name) ?? [],
-    [peopleQuery.data],
-  );
+  const categories = useMemo(() => {
+    if (api.demoMode) return api.demoCategories.map((c) => c.name);
+    return categoriesQuery.data?.map((c) => c.name) ?? [];
+  }, [api.demoCategories, api.demoMode, categoriesQuery.data]);
 
-  const sourceClips: Clip[] = useMemo(
-    () =>
-      isSearchActive
-        ? (searchQueryResult.data?.clips ?? [])
-        : (clipsQuery.data ?? []),
-    [isSearchActive, searchQueryResult.data, clipsQuery.data],
-  );
+  const people = useMemo(() => {
+    if (api.demoMode) return api.demoPeople.map((p) => p.name);
+    return peopleQuery.data?.map((p) => p.name) ?? [];
+  }, [api.demoMode, api.demoPeople, peopleQuery.data]);
+
+  const sourceClips: Clip[] = useMemo(() => {
+    if (api.demoMode) {
+      const clips = api.demoClips;
+      if (!isSearchActive) return clips;
+      const q = debouncedSearch.trim().toLowerCase();
+      return clips.filter((clip) => {
+        const haystack = [
+          clip.title,
+          clip.description ?? "",
+          clip.category ?? "",
+          ...(clip.people ?? []),
+          clip.location_label ?? "",
+          clip.camera_model ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        const matchesQuery = !q || haystack.includes(q);
+        const matchesPerson =
+          !searchParams.person || clip.people?.includes(searchParams.person);
+        const matchesCategory =
+          !searchParams.category || clip.category === searchParams.category;
+        return matchesQuery && matchesPerson && matchesCategory;
+      });
+    }
+    return isSearchActive
+      ? (searchQueryResult.data?.clips ?? [])
+      : (clipsQuery.data ?? []);
+  }, [
+    api.demoClips,
+    api.demoMode,
+    clipsQuery.data,
+    debouncedSearch,
+    isSearchActive,
+    searchParams.category,
+    searchParams.person,
+    searchQueryResult.data,
+  ]);
 
   const filteredClips = useMemo(() => {
     if (isSearchActive) return sourceClips;
@@ -123,21 +154,25 @@ function Dashboard() {
 
   const resultFacets = searchQueryResult.data?.facets ?? {};
 
-  const allClipsForStats = clipsQuery.data ?? sourceClips;
+  const allClipsForStats = api.demoMode
+    ? api.demoClips
+    : (clipsQuery.data ?? sourceClips);
 
   const totalStorage = allClipsForStats.reduce(
     (sum, clip) => sum + (clip.file_size ?? 0),
     0,
   );
 
-  const isLoading =
-    categoriesQuery.isLoading ||
-    peopleQuery.isLoading ||
-    (isSearchActive
-      ? searchQueryResult.isLoading && !searchQueryResult.data
-      : clipsQuery.isLoading && !clipsQuery.data);
+  const isLoading = api.demoMode
+    ? false
+    : categoriesQuery.isLoading ||
+      peopleQuery.isLoading ||
+      (isSearchActive
+        ? searchQueryResult.isLoading && !searchQueryResult.data
+        : clipsQuery.isLoading && !clipsQuery.data);
 
   const isSearching =
+    !api.demoMode &&
     searchQuery.trim().length > 0 &&
     (searchQuery !== debouncedSearch || searchQueryResult.isFetching);
 
@@ -174,11 +209,19 @@ function Dashboard() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.people.all });
   };
 
-  const clipsError = isSearchActive ? searchQueryResult.error : clipsQuery.error;
+  const clipsError = api.demoMode
+    ? null
+    : isSearchActive
+      ? searchQueryResult.error
+      : clipsQuery.error;
 
-  const filterSignature = `${debouncedSearch.trim()}|${selectedCategory}|${selectedPerson}|${JSON.stringify(searchFacets)}`;
+  const filterSignature = `${debouncedSearch.trim()}|${selectedCategory}|${selectedPerson}|${JSON.stringify(searchFacets)}|demo:${api.demoMode}`;
   const isFetchingClips =
-    clipsQuery.isFetching || searchQueryResult.isFetching;
+    !api.demoMode && (clipsQuery.isFetching || searchQueryResult.isFetching);
+
+  const selectedDemoClip = api.demoMode
+    ? (api.demoClips.find((clip) => clip.id === selectedClipId) ?? null)
+    : null;
 
   const handleFacetChange = (key: SearchFacetKey, value: string | null) => {
     setSearchFacets((prev) => {
@@ -206,7 +249,11 @@ function Dashboard() {
         }}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        isLoading={categoriesQuery.isLoading || peopleQuery.isLoading}
+        isLoading={
+          api.demoMode
+            ? false
+            : categoriesQuery.isLoading || peopleQuery.isLoading
+        }
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -222,7 +269,8 @@ function Dashboard() {
           apiVisualState={api.visualState}
           apiStatusLabel={api.statusLabel}
           apiTogglePending={api.isToggling}
-          onApiToggle={() => void api.toggle()}
+          apiButtonCaption={api.apiButtonLabel}
+          onApiToggle={() => api.toggle()}
         />
 
         <m.main
@@ -301,7 +349,21 @@ function Dashboard() {
               role="alert"
               className="mb-4 border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-100"
             >
-              Could not load clips. Confirm the API is running, then refresh.
+              Could not load clips. Confirm the API is running, then refresh —
+              or double-click the API control for demo mode.
+            </div>
+          )}
+
+          {api.demoMode && (
+            <div
+              role="status"
+              className="mb-4 border border-sky-900/40 bg-sky-950/30 px-3 py-2 text-sm text-sky-100"
+            >
+              Demo mode is on. Showing sample clips
+              {api.demoClips.some((c) => c.id > 0)
+                ? " from your local API"
+                : ""}
+              . Double-click the API control to exit.
             </div>
           )}
 
@@ -339,6 +401,7 @@ function Dashboard() {
 
         <ClipDetailsDrawer
           clipId={selectedClipId}
+          clipOverride={selectedDemoClip}
           isOpen={drawerOpen}
           returnFocusRef={drawerReturnFocusRef}
           onClose={() => {

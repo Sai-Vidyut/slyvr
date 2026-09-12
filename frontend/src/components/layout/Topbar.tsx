@@ -25,6 +25,7 @@ export interface TopbarProps {
   apiVisualState?: ApiStatusVisualState;
   apiStatusLabel?: string;
   apiTogglePending?: boolean;
+  apiButtonCaption?: string;
   onApiToggle?: () => void;
 }
 
@@ -32,22 +33,29 @@ function ApiStatusControl({
   visualState,
   statusLabel,
   pending,
+  buttonCaption,
   onToggle,
 }: {
   visualState: ApiStatusVisualState;
   statusLabel: string;
   pending?: boolean;
+  buttonCaption?: string;
   onToggle?: () => void;
 }) {
   const reduced = useReducedMotion();
   const active = visualState === "active";
+  const caption =
+    buttonCaption ??
+    (active ? "Active" : visualState === "loading" ? "…" : "Off");
 
   const tone =
-    visualState === "active"
-      ? "text-emerald-500/90"
-      : visualState === "loading"
-        ? "text-amber-500/90"
-        : "text-red-400/85";
+    buttonCaption === "Demo"
+      ? "text-sky-400/90"
+      : visualState === "active"
+        ? "text-emerald-500/90"
+        : visualState === "loading"
+          ? "text-amber-500/90"
+          : "text-red-400/85";
 
   return (
     <m.button
@@ -70,7 +78,7 @@ function ApiStatusControl({
       aria-pressed={active}
       aria-busy={pending || visualState === "loading"}
       aria-label={statusLabel}
-      title={statusLabel}
+      title={`${statusLabel} · Double-click for demo mode`}
       className={cn(
         "hidden min-h-10 items-center gap-2 rounded-md border border-[var(--clip-border)] px-2.5 py-1.5",
         "text-xs text-[var(--clip-muted)] transition-[border-color,background-color,color] duration-150 ease-out",
@@ -84,7 +92,7 @@ function ApiStatusControl({
         API
       </span>
       <span className="text-[var(--clip-fg)]" aria-hidden>
-        {active ? "Active" : visualState === "loading" ? "…" : "Off"}
+        {caption}
       </span>
     </m.button>
   );
@@ -102,6 +110,7 @@ function Topbar({
   apiVisualState = "loading",
   apiStatusLabel = "Checking API",
   apiTogglePending = false,
+  apiButtonCaption,
   onApiToggle,
 }: TopbarProps) {
   const [focused, setFocused] = useState(false);
@@ -205,6 +214,7 @@ function Topbar({
             visualState={apiVisualState}
             statusLabel={apiStatusLabel}
             pending={apiTogglePending}
+            buttonCaption={apiButtonCaption}
             onToggle={onApiToggle}
           />
 

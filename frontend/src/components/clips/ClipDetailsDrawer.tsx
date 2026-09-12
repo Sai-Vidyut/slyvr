@@ -1,7 +1,7 @@
 import { AnimatePresence, m } from "framer-motion";
 import axios from "axios";
 import { X } from "lucide-react";
-import { type RefObject, useEffect, useId, useRef } from "react";
+import { type RefObject, useEffect, useId, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 
 import { ClipInspectorForm } from "@/components/clips/ClipInspectorForm";
@@ -19,9 +19,12 @@ import {
   tweenUi,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import type { Clip } from "@/types/clip";
 
 interface Props {
   clipId: number | null;
+  /** When set (demo mode), skip the network detail fetch. */
+  clipOverride?: Clip | null;
   isOpen: boolean;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
@@ -29,6 +32,7 @@ interface Props {
 
 function ClipDetailsDrawer({
   clipId,
+  clipOverride = null,
   isOpen,
   onClose,
   returnFocusRef,
@@ -39,11 +43,22 @@ function ClipDetailsDrawer({
   const drawerRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { data: clip, isLoading, isError, error } = useClipQuery(
-    clipId,
-    isOpen && clipId != null,
-  );
-  const { data: categories = [] } = useCategoriesQuery();
+  const {
+    data: fetchedClip,
+    isLoading: isFetchLoading,
+    isError: isFetchError,
+    error,
+  } = useClipQuery(clipId, isOpen && clipId != null && clipOverride == null);
+  const { data: fetchedCategories = [] } = useCategoriesQuery(clipOverride == null);
+
+  const clip = clipOverride ?? fetchedClip;
+  const isLoading = clipOverride ? false : isFetchLoading;
+  const isError = clipOverride ? false : isFetchError;
+  const categories = useMemo(() => {
+    if (!clipOverride) return fetchedCategories;
+    if (!clipOverride.category) return [];
+    return [{ id: 1, name: clipOverride.category }];
+  }, [clipOverride, fetchedCategories]);
 
   useDialogFocus({
     open: isOpen && clipId != null,
