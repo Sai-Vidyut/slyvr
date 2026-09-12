@@ -48,6 +48,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# v1.0.0
+# Cursor / agent tooling (not product source)
+.agents/
+skills-lock.json
+
+# Coverage / tooling
+coverage/
+.nyc_output/
+*.tsbuildinfo
 
 
