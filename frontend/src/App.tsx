@@ -5,9 +5,12 @@ import LandingPage from "./pages/LandingPage";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
+/** Vite BASE_URL includes a trailing slash; React Router basename must not. */
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
+
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <Suspense
         fallback={
           <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[var(--clip-bg)] text-sm text-[var(--clip-muted)]">

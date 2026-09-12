@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 
-/** Local asset — see `public/landing/README.md` */
-export const HERO_WORKSPACE_PHOTO = "/landing/hero-workspace.jpg";
+/** Local asset — see `public/landing/README.md` (base-aware for /slyvr/ deploy) */
+export const HERO_WORKSPACE_PHOTO = `${import.meta.env.BASE_URL}landing/hero-workspace.jpg`;
 
 export function HeroAtmosphere() {
   const [failed, setFailed] = useState(false);
