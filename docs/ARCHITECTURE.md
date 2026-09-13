@@ -151,7 +151,7 @@ Path alias `@/` → `frontend/src` (Vite).
 | `metadata_service.py` | ExifTool JSON + ffprobe → structured metadata |
 | `search_service.py` | Candidate SQL + RapidFuzz scoring + facets |
 | `ffmpeg_service.py` | Video thumbnail via FFmpeg |
-| `storage/*` + `azure_service.py` | Storage facade; Azure Blob upload/delete (first provider) |
+| `storage/*` + `azure_service.py` | Storage facade; Azure Blob upload/delete (first provider); clips store provider/object keys + compatibility URLs |
 | `exif_service.py` | Legacy narrow ExifTool helper (upload uses `metadata_service`) |
 | `clip_service.py` | CRUD helpers; legacy ILIKE `search_clips` retained |
 
@@ -164,8 +164,8 @@ multipart POST /upload (field name: video)
   → write temp file under Backend/temp_uploads/
   → extract_media_metadata()  [non-fatal on failure]
   → thumbnail: copy for images OR FFmpeg still for video
-  → upload media + thumbnail to Azure
-  → insert Clip row (+ people M2M)
+  → upload media + thumbnail via storage facade (Azure today)
+  → insert Clip row with provider/object keys and blob URLs (+ people M2M)
   → delete temp files
   → JSON response { clip_id, urls, metadata }
 ```

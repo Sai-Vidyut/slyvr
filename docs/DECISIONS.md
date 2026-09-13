@@ -78,9 +78,9 @@ Decisions evidenced by the **current** Slyvr codebase. Inferred items are labele
 
 ### Object storage (Azure first provider)
 
-**Decision:** Media and thumbnails stored in object storage; clips keep `blob_url` / `thumbnail_url`. The runtime uses `Backend/services/storage/` with an Azure Blob adapter (`AZURE_CONNECTION_STRING`).  
-**Why:** Offloads binary storage from the API host while allowing additional providers later without changing the clip API.  
-**Consequence:** Local uploads still require Azure configuration until another provider is implemented.
+**Decision:** Media and thumbnails live in object storage. Each `Clip` stores provider-neutral refs (`storage_provider`, `media_object_key`, `thumbnail_object_key`) as the canonical storage identity; `blob_url` / `thumbnail_url` remain compatibility/read fields for the API and existing clients. Runtime I/O goes through `Backend/services/storage/` with an Azure Blob adapter (`AZURE_CONNECTION_STRING`).
+**Why:** Offloads binaries from the API host and decouples persistence from permanent provider URLs before multi-provider or signed-read work.
+**Consequence:** Local uploads still require Azure until another provider is implemented; per-library provider choice and signed URL reads are later phases.
 
 ---
 

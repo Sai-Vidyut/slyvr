@@ -36,6 +36,9 @@ _CLIP_COLUMN_MIGRATIONS = [
     ("metadata_json", "TEXT"),
     ("library_id", "INTEGER"),
     ("uploaded_by_user_id", "VARCHAR(36)"),
+    ("storage_provider", "VARCHAR(32)"),
+    ("media_object_key", "VARCHAR(512)"),
+    ("thumbnail_object_key", "VARCHAR(512)"),
 ]
 
 _CATEGORY_COLUMN_MIGRATIONS = [
@@ -280,6 +283,9 @@ def ensure_schema() -> None:
         if "clips" in tables:
             existing = _column_names(inspector, "clips")
             _add_missing_columns(conn, "clips", _CLIP_COLUMN_MIGRATIONS, existing)
+            from services.storage.backfill import backfill_clip_storage_refs
+
+            backfill_clip_storage_refs(conn)
 
         if "categories" in tables:
             existing = _column_names(inspector, "categories")

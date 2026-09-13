@@ -173,6 +173,10 @@ class Clip(Base):
     blob_url = Column(String(2048), nullable=False)
     thumbnail_url = Column(String(2048))
 
+    storage_provider = Column(String(32), nullable=True)
+    media_object_key = Column(String(512), nullable=True)
+    thumbnail_object_key = Column(String(512), nullable=True)
+
     original_filename = Column(String(255))
     stored_filename = Column(String(255))
 

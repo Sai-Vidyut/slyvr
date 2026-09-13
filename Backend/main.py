@@ -134,12 +134,12 @@ async def upload_media(
         logger.info("Thumbnail prepared at %s", temp_thumbnail_path)
 
         storage = get_storage_service()
-        media_blob_url = storage.upload_file(
+        media_stored = storage.upload_file(
             temp_media_path,
             library_id=library_id,
             purpose=StoragePurpose.MEDIA,
         )
-        thumbnail_blob_url = storage.upload_file(
+        thumbnail_stored = storage.upload_file(
             temp_thumbnail_path,
             library_id=library_id,
             purpose=StoragePurpose.THUMBNAIL,
@@ -167,8 +167,11 @@ async def upload_media(
             title=title,
             description=description,
             category_id=resolved_category_id,
-            blob_url=media_blob_url,
-            thumbnail_url=thumbnail_blob_url,
+            storage_provider=media_stored.provider,
+            media_object_key=media_stored.object_key,
+            thumbnail_object_key=thumbnail_stored.object_key,
+            blob_url=media_stored.read_url,
+            thumbnail_url=thumbnail_stored.read_url,
             original_filename=original_name,
             stored_filename=stored_filename,
             file_size=file_size,
@@ -208,8 +211,8 @@ async def upload_media(
             "clip_id": clip.id,
             "library_id": library_id,
             "uploaded_by_user_id": uploader_id,
-            "video_blob_url": media_blob_url,
-            "thumbnail_blob_url": thumbnail_blob_url,
+            "video_blob_url": media_stored.read_url,
+            "thumbnail_blob_url": thumbnail_stored.read_url,
             "metadata": extracted,
         }
 

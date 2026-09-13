@@ -13,13 +13,16 @@ sys.path.insert(0, str(BACKEND_ROOT))
 
 from services.clip_service import delete_clip
 from services.storage.service import StorageService
-from services.storage.types import StoragePurpose, StoredObject
+from services.storage.types import PROVIDER_AZURE, StoragePurpose, StoredObject
+
+_VALID_KEY = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4"
 
 
 class FakeStorageProvider:
     def __init__(self) -> None:
         self.put_calls: list[tuple[str, int, StoragePurpose]] = []
         self.delete_calls: list[tuple[str, int]] = []
+        self.delete_object_calls: list[tuple[StoredObject, int]] = []
         self.get_read_calls: list[tuple[str, int]] = []
         self.put_should_fail = False
 
@@ -34,8 +37,16 @@ class FakeStorageProvider:
         if self.put_should_fail:
             raise RuntimeError("upload failed")
         return StoredObject(
-            read_url=f"https://fake.test/{library_id}/{purpose.value}/file.bin"
+            provider=PROVIDER_AZURE,
+            bucket=purpose.value,
+            object_key=_VALID_KEY,
+            read_url=f"https://fake.test/{library_id}/{purpose.value}/{_VALID_KEY}",
         )
+
+    def delete_object(self, ref: StoredObject, *, library_id: int) -> None:
+        self.delete_object_calls.append((ref, library_id))
+        if ref.read_url.endswith("/fail"):
+            raise RuntimeError("delete failed")
 
     def delete_by_url(self, read_url: str, *, library_id: int) -> None:
         self.delete_calls.append((read_url, library_id))
@@ -51,13 +62,15 @@ def test_facade_upload_delegates_with_library_id():
     fake = FakeStorageProvider()
     service = StorageService(provider=fake)
 
-    url = service.upload_file(
+    stored = service.upload_file(
         "/tmp/video.mp4",
         library_id=42,
         purpose=StoragePurpose.MEDIA,
     )
 
-    assert url == "https://fake.test/42/clips/file.bin"
+    assert stored.read_url == f"https://fake.test/42/clips/{_VALID_KEY}"
+    assert stored.provider == PROVIDER_AZURE
+    assert stored.object_key == _VALID_KEY
     assert fake.put_calls == [("/tmp/video.mp4", 42, StoragePurpose.MEDIA)]
 
 
@@ -99,9 +112,16 @@ def test_azure_provider_put_delegates_to_azure_service():
     from services.storage.azure_provider import AzureBlobStorageProvider
 
     provider = AzureBlobStorageProvider()
+    from services.azure_service import AzureBlobUploadResult
+
+    blob_key = "11111111-2222-3333-4444-555555555555.mp4"
     with patch(
         "services.storage.azure_provider.azure_service.upload_file_to_azure",
-        return_value="https://azure.test/clips/abc.mp4",
+        return_value=AzureBlobUploadResult(
+            read_url=f"https://azure.test/clips/{blob_key}",
+            container_name="clips",
+            blob_name=blob_key,
+        ),
     ) as mock_upload:
         result = provider.put_file(
             "/tmp/a.mp4",
@@ -110,7 +130,62 @@ def test_azure_provider_put_delegates_to_azure_service():
         )
 
     mock_upload.assert_called_once_with("/tmp/a.mp4", "clips")
-    assert result.read_url == "https://azure.test/clips/abc.mp4"
+    assert result.read_url == f"https://azure.test/clips/{blob_key}"
+    assert result.object_key == blob_key
+    assert result.provider == PROVIDER_AZURE
+
+
+def test_azure_provider_delete_object_delegates_by_key():
+    from services.storage.azure_provider import AzureBlobStorageProvider
+
+    provider = AzureBlobStorageProvider()
+    blob_key = "11111111-2222-3333-4444-555555555555.mp4"
+    ref = StoredObject(
+        provider=PROVIDER_AZURE,
+        bucket="clips",
+        object_key=blob_key,
+        read_url=f"https://azure.test/clips/{blob_key}",
+    )
+    with patch(
+        "services.storage.azure_provider.azure_service.delete_blob_from_azure_by_key"
+    ) as mock_delete:
+        provider.delete_object(ref, library_id=1)
+
+    mock_delete.assert_called_once_with("clips", blob_key)
+
+
+def test_delete_clip_with_refs_uses_delete_object(sqlite_session):
+    from models import Clip, Library
+
+    db = sqlite_session
+    library = Library(type="personal", owner_user_id="user-1", name="Personal")
+    db.add(library)
+    db.commit()
+    db.refresh(library)
+
+    blob_key = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4"
+    clip = Clip(
+        library_id=library.id,
+        title="t",
+        storage_provider=PROVIDER_AZURE,
+        media_object_key=blob_key,
+        thumbnail_object_key=blob_key,
+        blob_url=f"https://fake.test/clips/{blob_key}",
+        thumbnail_url=f"https://fake.test/thumbnails/{blob_key}",
+    )
+    db.add(clip)
+    db.commit()
+    db.refresh(clip)
+
+    fake = FakeStorageProvider()
+    with patch(
+        "services.clip_service.get_storage_service",
+        return_value=StorageService(provider=fake),
+    ):
+        delete_clip(db, clip.id, library.id)
+
+    assert len(fake.delete_object_calls) == 2
+    assert fake.delete_calls == []
 
 
 def test_azure_provider_delete_delegates_to_azure_service():
@@ -130,15 +205,15 @@ def test_upload_order_before_db_commit_pattern():
     fake = FakeStorageProvider()
     service = StorageService(provider=fake)
 
-    media_url = service.upload_file(
+    media_stored = service.upload_file(
         "/tmp/media.mp4", library_id=10, purpose=StoragePurpose.MEDIA
     )
-    thumb_url = service.upload_file(
+    thumb_stored = service.upload_file(
         "/tmp/thumb.jpg", library_id=10, purpose=StoragePurpose.THUMBNAIL
     )
 
-    assert "clips" in media_url
-    assert "thumbnails" in thumb_url
+    assert media_stored.bucket == "clips"
+    assert thumb_stored.bucket == "thumbnails"
     assert len(fake.put_calls) == 2
 
     fake.put_should_fail = True

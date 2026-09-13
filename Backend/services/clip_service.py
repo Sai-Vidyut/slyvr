@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from models import Category, Clip, Person
 from services.storage import get_storage_service
+from services.storage.types import PROVIDER_AZURE, StoragePurpose, StoredObjectRef
 
 
 def get_all_clips(db: Session, library_id: int) -> List[Clip]:
@@ -122,6 +123,28 @@ def create_person(db: Session, name: str, library_id: int):
     return person
 
 
+def _clip_media_ref(clip: Clip) -> Optional[StoredObjectRef]:
+    if clip.storage_provider != PROVIDER_AZURE or not clip.media_object_key:
+        return None
+    return StoredObjectRef(
+        provider=clip.storage_provider,
+        bucket=StoragePurpose.MEDIA.value,
+        object_key=clip.media_object_key,
+        read_url=clip.blob_url or "",
+    )
+
+
+def _clip_thumbnail_ref(clip: Clip) -> Optional[StoredObjectRef]:
+    if clip.storage_provider != PROVIDER_AZURE or not clip.thumbnail_object_key:
+        return None
+    return StoredObjectRef(
+        provider=clip.storage_provider,
+        bucket=StoragePurpose.THUMBNAIL.value,
+        object_key=clip.thumbnail_object_key,
+        read_url=clip.thumbnail_url or "",
+    )
+
+
 def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
     clip = (
         db.query(Clip)
@@ -136,14 +159,21 @@ def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
         )
 
     storage = get_storage_service()
+    media_ref = _clip_media_ref(clip)
+    thumb_ref = _clip_thumbnail_ref(clip)
+
     try:
-        if clip.blob_url:
+        if media_ref:
+            storage.delete_object(media_ref, library_id=library_id)
+        elif clip.blob_url:
             storage.delete_by_url(clip.blob_url, library_id=library_id)
     except Exception as e:
         print(f"Failed to delete video blob: {e}")
 
     try:
-        if clip.thumbnail_url:
+        if thumb_ref:
+            storage.delete_object(thumb_ref, library_id=library_id)
+        elif clip.thumbnail_url:
             storage.delete_by_url(clip.thumbnail_url, library_id=library_id)
     except Exception as e:
         print(f"Failed to delete thumbnail blob: {e}")
