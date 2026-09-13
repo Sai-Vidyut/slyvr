@@ -1,0 +1,24 @@
+[Unit]
+Description=Slyvr FastAPI (uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slyvr
+Group=slyvr
+WorkingDirectory=/home/slyvr/slyvr/Backend
+EnvironmentFile=/home/slyvr/slyvr/Backend/.env
+ExecStart=/home/slyvr/slyvr/Backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5
+# Hardening (compatible with home-directory SQLite + temp uploads)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/slyvr/slyvr/Backend
+ReadWritePaths=/home/slyvr/slyvr/Backend/temp_uploads
+
+[Install]
+WantedBy=multi-user.target
