@@ -64,6 +64,11 @@ class ClipResponse(BaseModel):
         from_attributes = True
 
 
+class ClipReadUrlResponse(BaseModel):
+    url: str
+    expires_at: datetime
+
+
 class ClipListResponse(BaseModel):
     clips: List[ClipResponse]
 

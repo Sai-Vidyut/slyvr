@@ -1,6 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from auth.config import get_settings
 from models import Clip
 
 
@@ -24,6 +25,7 @@ def serialize_clip(clip: Clip) -> Dict[str, Any]:
             "display_name": uploader.display_name if uploader else None,
             "email": uploader.email if uploader else None,
         }
+    hide_direct_urls = get_settings().hide_direct_media_urls
     return {
         "id": clip.id,
         "library_id": getattr(clip, "library_id", None),
@@ -31,8 +33,8 @@ def serialize_clip(clip: Clip) -> Dict[str, Any]:
         "description": clip.description,
         "category": clip.category_rel.name if clip.category_rel else None,
         "people": [person.name for person in clip.people],
-        "blob_url": clip.blob_url,
-        "thumbnail_url": clip.thumbnail_url,
+        "blob_url": None if hide_direct_urls else clip.blob_url,
+        "thumbnail_url": None if hide_direct_urls else clip.thumbnail_url,
         "original_filename": clip.original_filename,
         "stored_filename": clip.stored_filename,
         "camera_model": clip.camera_model,

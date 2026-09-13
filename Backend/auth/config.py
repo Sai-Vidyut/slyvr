@@ -47,6 +47,24 @@ class Settings:
             self.max_upload_bytes = max(1, int(raw_max))
         else:
             self.max_upload_bytes = 2 * 1024 * 1024 * 1024
+        self.signed_media_reads = (
+            os.getenv("SLYVR_SIGNED_MEDIA_READS", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+        # Omit raw blob URLs from API responses — set only with coordinated frontend
+        # (VITE_SIGNED_MEDIA_READS=1). Independent of SLYVR_SIGNED_MEDIA_READS so the
+        # backend signing flag alone cannot break legacy clients.
+        self.hide_direct_media_urls = (
+            os.getenv("SLYVR_HIDE_DIRECT_MEDIA_URLS", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+        raw_ttl = (os.getenv("SLYVR_MEDIA_READ_SAS_TTL_SECONDS") or "").strip()
+        if raw_ttl.isdigit():
+            ttl = int(raw_ttl)
+        else:
+            ttl = 3600
+        # Bounded TTL: 5 minutes .. 24 hours
+        self.media_read_sas_ttl_seconds = max(300, min(ttl, 86400))
 
 
 @lru_cache

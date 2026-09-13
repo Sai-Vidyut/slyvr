@@ -177,6 +177,7 @@ function ClipDetailsDrawer({
                   clip={clip}
                   categories={categories}
                   onDeleted={onClose}
+                  directMediaUrls={clipOverride != null}
                 />
               )}
             </div>

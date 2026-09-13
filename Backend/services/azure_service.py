@@ -1,11 +1,12 @@
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import AzureError
-from azure.storage.blob import ContentSettings
+from azure.storage.blob import BlobSasPermissions, ContentSettings, generate_blob_sas
 from urllib.parse import urlparse
 
 load_dotenv()
@@ -107,3 +108,44 @@ def delete_blob_from_azure_by_key(container_name: str, blob_name: str) -> None:
         blob=blob_name,
     )
     blob_client.delete_blob()
+
+
+def generate_blob_read_sas_url(
+    container_name: str,
+    blob_name: str,
+    *,
+    ttl_seconds: int,
+) -> tuple[str, datetime]:
+    """
+    Return a read-only SAS URL and expiry for a single blob in the configured account.
+
+    Uses server-side connection string credentials only; does not fetch remote URLs.
+    """
+    if not AZURE_CONNECTION_STRING:
+        raise ValueError("AZURE_CONNECTION_STRING environment variable not set")
+    if ttl_seconds < 1:
+        raise ValueError("ttl_seconds must be positive")
+
+    blob_service_client = BlobServiceClient.from_connection_string(
+        AZURE_CONNECTION_STRING
+    )
+    account_name = blob_service_client.account_name
+    credential = blob_service_client.credential
+    account_key = getattr(credential, "account_key", None)
+    if not account_name or not account_key:
+        raise ValueError("Azure connection string must include account name and key for SAS")
+
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    sas_token = generate_blob_sas(
+        account_name=account_name,
+        container_name=container_name,
+        blob_name=blob_name,
+        account_key=account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=expires_at,
+    )
+    url = (
+        f"https://{account_name}.blob.core.windows.net/"
+        f"{container_name}/{blob_name}?{sas_token}"
+    )
+    return url, expires_at

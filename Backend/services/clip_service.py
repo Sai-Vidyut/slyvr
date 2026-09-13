@@ -5,8 +5,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from models import Category, Clip, Person
+from services.clip_storage_refs import clip_media_ref, clip_thumbnail_ref
 from services.storage import get_storage_service
-from services.storage.types import PROVIDER_AZURE, StoragePurpose, StoredObjectRef
 
 
 def get_all_clips(db: Session, library_id: int) -> List[Clip]:
@@ -123,28 +123,6 @@ def create_person(db: Session, name: str, library_id: int):
     return person
 
 
-def _clip_media_ref(clip: Clip) -> Optional[StoredObjectRef]:
-    if clip.storage_provider != PROVIDER_AZURE or not clip.media_object_key:
-        return None
-    return StoredObjectRef(
-        provider=clip.storage_provider,
-        bucket=StoragePurpose.MEDIA.value,
-        object_key=clip.media_object_key,
-        read_url=clip.blob_url or "",
-    )
-
-
-def _clip_thumbnail_ref(clip: Clip) -> Optional[StoredObjectRef]:
-    if clip.storage_provider != PROVIDER_AZURE or not clip.thumbnail_object_key:
-        return None
-    return StoredObjectRef(
-        provider=clip.storage_provider,
-        bucket=StoragePurpose.THUMBNAIL.value,
-        object_key=clip.thumbnail_object_key,
-        read_url=clip.thumbnail_url or "",
-    )
-
-
 def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
     clip = (
         db.query(Clip)
@@ -159,8 +137,8 @@ def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
         )
 
     storage = get_storage_service()
-    media_ref = _clip_media_ref(clip)
-    thumb_ref = _clip_thumbnail_ref(clip)
+    media_ref = clip_media_ref(clip)
+    thumb_ref = clip_thumbnail_ref(clip)
 
     try:
         if media_ref:

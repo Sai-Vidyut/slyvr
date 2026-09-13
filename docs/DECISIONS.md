@@ -80,7 +80,9 @@ Decisions evidenced by the **current** Slyvr codebase. Inferred items are labele
 
 **Decision:** Media and thumbnails live in object storage. Each `Clip` stores provider-neutral refs (`storage_provider`, `media_object_key`, `thumbnail_object_key`) as the canonical storage identity; `blob_url` / `thumbnail_url` remain compatibility/read fields for the API and existing clients. Runtime I/O goes through `Backend/services/storage/` with an Azure Blob adapter (`AZURE_CONNECTION_STRING`).
 **Why:** Offloads binaries from the API host and decouples persistence from permanent provider URLs before multi-provider or signed-read work.
-**Consequence:** Local uploads still require Azure until another provider is implemented; per-library provider choice and signed URL reads are later phases.
+**Consequence:** Local uploads still require Azure until another provider is implemented; per-library provider choice remains a later phase.
+
+**Phase 3 read access:** Authenticated `GET /clips/{id}/read-url?purpose=media|thumbnail` resolves the clip in the active library, builds a server-side `StoredObjectRef`, and returns a short-lived read URL (Azure SAS when signable). Legacy URL signing requires the blob URL host to match the configured Azure account; foreign hosts are not signed. Legacy external URLs are passed through without server fetch. Deploy `SLYVR_SIGNED_MEDIA_READS=1` together with `VITE_SIGNED_MEDIA_READS=1`. Optional `SLYVR_HIDE_DIRECT_MEDIA_URLS=1` omits raw blob URLs from API responses only after the frontend uses read-url. **Private media enforcement requires Azure containers to be set private in deployment** — the application does not change container ACLs.
 
 ---
 

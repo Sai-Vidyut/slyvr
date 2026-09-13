@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
+from functools import lru_cache
+from typing import Optional, Set
 from urllib.parse import urlparse
 
-from services.storage.types import PROVIDER_AZURE, StoragePurpose
+from services.storage.types import StoragePurpose
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +69,79 @@ def parse_slyvr_azure_blob_url(url: str) -> Optional[ParsedAzureBlobUrl]:
     if not is_valid_object_key(object_key):
         return None
     return ParsedAzureBlobUrl(container_name=container_name, object_key=object_key)
+
+
+def _connection_string_parts(connection_string: str) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for segment in connection_string.split(";"):
+        if "=" not in segment:
+            continue
+        key, value = segment.split("=", 1)
+        parts[key.strip()] = value.strip()
+    return parts
+
+
+@lru_cache
+def configured_azure_blob_netlocs() -> frozenset[str]:
+    """
+    Netloc values for blob URLs on the configured Azure account (from env credentials).
+
+    Derived from AccountName and optional BlobEndpoint in AZURE_CONNECTION_STRING.
+    Empty when Azure is not configured — URL-based signing must not proceed.
+    """
+    from services import azure_service
+
+    connection_string = azure_service.AZURE_CONNECTION_STRING
+    if not connection_string:
+        return frozenset()
+
+    netlocs: Set[str] = set()
+    parts = _connection_string_parts(connection_string)
+    account_name = parts.get("AccountName")
+    if account_name:
+        netlocs.add(f"{account_name.lower()}.blob.core.windows.net")
+
+    for endpoint_key in ("BlobEndpoint", "BlobStorageEndpoint"):
+        endpoint = parts.get(endpoint_key)
+        if not endpoint:
+            continue
+        parsed = urlparse(endpoint)
+        if parsed.netloc:
+            netlocs.add(parsed.netloc.lower())
+
+    if not netlocs:
+        try:
+            from azure.storage.blob import BlobServiceClient
+
+            client = BlobServiceClient.from_connection_string(connection_string)
+            if client.account_name:
+                netlocs.add(f"{client.account_name.lower()}.blob.core.windows.net")
+        except Exception:
+            logger.warning("Could not derive Azure blob netloc from connection string")
+
+    return frozenset(netlocs)
+
+
+def blob_url_netloc_matches_configured_account(url: str) -> bool:
+    """True when the URL host matches the configured Azure blob endpoint(s)."""
+    if not url:
+        return False
+    parsed = urlparse(url.strip())
+    netloc = (parsed.netloc or "").lower()
+    if not netloc:
+        return False
+    allowed = configured_azure_blob_netlocs()
+    if not allowed:
+        return False
+    return netloc in allowed
+
+
+def parse_slyvr_azure_blob_url_for_signing(url: str) -> Optional[ParsedAzureBlobUrl]:
+    """
+    Parse a legacy blob URL only when path shape and configured Azure host match.
+
+    Used for read signing — does not trust foreign hosts. Does not fetch URLs.
+    """
+    if not blob_url_netloc_matches_configured_account(url):
+        return None
+    return parse_slyvr_azure_blob_url(url)

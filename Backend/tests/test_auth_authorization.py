@@ -435,3 +435,43 @@ def test_categories_scoped_per_library():
     ).json()
     assert len(a_cats) == 1 and len(b_cats) == 1
     assert a_cats[0]["id"] != b_cats[0]["id"]
+
+
+def test_clip_read_url_authorized_external_passthrough():
+    _, lib_a = seed_user("user-read-a", "read-a@example.com")
+    clip_id = add_clip(lib_a.id, "read-test", "user-read-a")
+    r = client.get(
+        f"/clips/{clip_id}/read-url",
+        params={"purpose": "media"},
+        headers=auth_headers("user-read-a", "read-a@example.com", lib_a.id),
+    )
+    assert r.status_code == 200
+    assert r.json()["url"].startswith("https://example.test/")
+
+
+def test_clip_read_url_cross_library_404():
+    _, lib_a = seed_user("user-read-b", "read-b@example.com")
+    _, lib_b = seed_user("user-read-c", "read-c@example.com")
+    clip_b = add_clip(lib_b.id, "secret", "user-read-c")
+    r = client.get(
+        f"/clips/{clip_b}/read-url",
+        params={"purpose": "media"},
+        headers=auth_headers("user-read-b", "read-b@example.com", lib_a.id),
+    )
+    assert r.status_code == 404
+
+
+def test_clip_read_url_unauthenticated():
+    r = client.get("/clips/1/read-url", params={"purpose": "media"})
+    assert r.status_code == 401
+
+
+def test_clip_read_url_invalid_purpose():
+    _, lib_a = seed_user("user-read-d", "read-d@example.com")
+    clip_id = add_clip(lib_a.id, "purpose-test", "user-read-d")
+    r = client.get(
+        f"/clips/{clip_id}/read-url",
+        params={"purpose": "invalid"},
+        headers=auth_headers("user-read-d", "read-d@example.com", lib_a.id),
+    )
+    assert r.status_code == 422

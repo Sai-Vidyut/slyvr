@@ -3,8 +3,10 @@ import { Film, Play } from "lucide-react";
 import { useState } from "react";
 
 import { CardBody, CardContainer, CardItem } from "@/components/ui/3d-card";
+import { useClipReadUrl } from "@/hooks/use-clip-read-url";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { isSignedMediaReadsEnabled } from "@/lib/signed-media-reads";
 import {
   buttonTap,
   shouldAnimateEntrance,
@@ -24,6 +26,8 @@ interface ClipCardProps {
   index?: number;
   listSize?: number;
   isSelected?: boolean;
+  /** Demo/static clips: use thumbnail_url directly (no read-url API). */
+  directMediaUrls?: boolean;
 }
 
 function formatFileSize(bytes: number | null | undefined) {
@@ -40,10 +44,14 @@ function ClipCard({
   index = 0,
   listSize = 1,
   isSelected = false,
+  directMediaUrls = false,
 }: ClipCardProps) {
   const reducedMotion = useReducedMotion();
   const isMobile = useIsMobile();
   const [thumbFailed, setThumbFailed] = useState(false);
+  const signedReads = isSignedMediaReadsEnabled() && !directMediaUrls;
+  const thumbRead = useClipReadUrl(clip.id, "thumbnail", signedReads);
+  const thumbnailSrc = signedReads ? thumbRead.data?.url : clip.thumbnail_url;
   const animateEntrance =
     !reducedMotion && shouldAnimateEntrance(listSize, index);
   const touchUi = isMobile;
@@ -60,7 +68,7 @@ function ClipCard({
     formatFileSize(clip.file_size),
   ].filter(Boolean);
 
-  const showThumb = clip.thumbnail_url && !thumbFailed;
+  const showThumb = Boolean(thumbnailSrc) && !thumbFailed;
 
   return (
     <m.article
@@ -111,7 +119,7 @@ function ClipCard({
               <CardItem translateZ={14} layer="media" className="h-full w-full">
                 {showThumb ? (
                   <img
-                    src={clip.thumbnail_url!}
+                    src={thumbnailSrc!}
                     alt=""
                     className="h-full w-full object-cover"
                     loading="lazy"

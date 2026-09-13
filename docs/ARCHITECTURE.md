@@ -151,7 +151,8 @@ Path alias `@/` → `frontend/src` (Vite).
 | `metadata_service.py` | ExifTool JSON + ffprobe → structured metadata |
 | `search_service.py` | Candidate SQL + RapidFuzz scoring + facets |
 | `ffmpeg_service.py` | Video thumbnail via FFmpeg |
-| `storage/*` + `azure_service.py` | Storage facade; Azure Blob upload/delete (first provider); clips store provider/object keys + compatibility URLs |
+| `storage/*` + `azure_service.py` | Storage facade; Azure upload/delete + SAS read URLs; clips store provider/object keys + compatibility URLs |
+| `clip_read_access.py` | Authorized clip → `StoredObjectRef` → short-lived read URL (Phase 3) |
 | `exif_service.py` | Legacy narrow ExifTool helper (upload uses `metadata_service`) |
 | `clip_service.py` | CRUD helpers; legacy ILIKE `search_clips` retained |
 
@@ -169,6 +170,18 @@ multipart POST /upload (field name: video)
   → delete temp files
   → JSON response { clip_id, urls, metadata }
 ```
+
+**Phase 3 media read (optional, `SLYVR_SIGNED_MEDIA_READS`):**
+
+```text
+JWT + X-Library-Id → GET /clips/{id}/read-url?purpose=media|thumbnail
+  → get_clip_by_id (library scoped)
+  → resolve StoredObjectRef (DB refs or parse blob URL when host matches configured Azure account)
+  → StorageService.issue_read_url → Azure read SAS
+  → browser <img>/<video> src = SAS URL (no Authorization on media tag)
+```
+
+Legacy non-Azure URLs are returned unchanged. Container privatization is an ops prerequisite; code does not alter Azure ACLs.
 
 **Images:** detected by extension / `content_type`; original file copied as thumbnail.  
 **Videos:** FFmpeg thumbnail at ~1s.  

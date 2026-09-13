@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from services.storage.types import StoragePurpose, StoredObjectRef
+from services.storage.types import ReadAccess, StoragePurpose, StoredObjectRef
 
 
 class StorageProvider(Protocol):
@@ -23,5 +23,14 @@ class StorageProvider(Protocol):
     def delete_by_url(self, read_url: str, *, library_id: int) -> None:
         """Remove the object identified by a previously issued read URL (legacy)."""
 
+    def issue_read_url(
+        self,
+        ref: StoredObjectRef,
+        *,
+        library_id: int,
+        ttl_seconds: int,
+    ) -> ReadAccess:
+        """Return a short-lived read URL for a server-derived object reference."""
+
     def get_read_url(self, read_url: str, *, library_id: int) -> str:
-        """Return a URL clients may use to read the object (may be the stored URL)."""
+        """Return a URL clients may use to read the object (legacy passthrough)."""

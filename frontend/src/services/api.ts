@@ -27,6 +27,22 @@ export const getClipById = async (id: number): Promise<Clip> => {
   return response.data;
 };
 
+export type ClipReadUrlResponse = {
+  url: string;
+  expires_at: string;
+};
+
+export const getClipReadUrl = async (
+  id: number,
+  purpose: "media" | "thumbnail",
+): Promise<ClipReadUrlResponse> => {
+  const response = await apiClient.get<ClipReadUrlResponse>(
+    `/clips/${id}/read-url`,
+    { params: { purpose } },
+  );
+  return response.data;
+};
+
 export const searchClips = async (params: SearchParams): Promise<SearchResponse> => {
   const response = await apiClient.get<SearchResponse>("/clips/search", {
     params: {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 PROVIDER_AZURE = "azure"
@@ -23,6 +24,14 @@ class StoredObjectRef:
     bucket: str
     object_key: str
     read_url: str
+
+
+@dataclass(frozen=True)
+class ReadAccess:
+    """Time-bounded read URL for a single stored object (or passthrough external URL)."""
+
+    url: str
+    expires_at: datetime
 
 
 # Backward alias for Phase 1 imports/tests gradual migration

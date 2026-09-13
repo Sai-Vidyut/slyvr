@@ -205,14 +205,15 @@ async def upload_media(
             if path and os.path.exists(path):
                 os.remove(path)
 
+        hide_upload_urls = get_settings().hide_direct_media_urls
         return {
             "success": True,
             "message": "Media uploaded successfully",
             "clip_id": clip.id,
             "library_id": library_id,
             "uploaded_by_user_id": uploader_id,
-            "video_blob_url": media_stored.read_url,
-            "thumbnail_blob_url": thumbnail_stored.read_url,
+            "video_blob_url": None if hide_upload_urls else media_stored.read_url,
+            "thumbnail_blob_url": None if hide_upload_urls else thumbnail_stored.read_url,
             "metadata": extracted,
         }
 

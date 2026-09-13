@@ -8,7 +8,7 @@ from typing import Optional
 from services.storage.azure_provider import AzureBlobStorageProvider
 from services.storage.object_keys import is_valid_object_key
 from services.storage.protocol import StorageProvider
-from services.storage.types import StoragePurpose, StoredObjectRef
+from services.storage.types import ReadAccess, StoragePurpose, StoredObjectRef
 
 
 def _validate_library_id(library_id: int) -> int:
@@ -25,6 +25,12 @@ def _validate_object_ref(ref: StoredObjectRef) -> StoredObjectRef:
     if not is_valid_object_key(ref.object_key):
         raise ValueError("storage reference has invalid object key")
     return ref
+
+
+def _validate_ttl(ttl_seconds: int) -> int:
+    if not isinstance(ttl_seconds, int) or ttl_seconds < 1:
+        raise ValueError("ttl_seconds must be a positive integer")
+    return ttl_seconds
 
 
 class StorageService:
@@ -60,6 +66,21 @@ class StorageService:
         if not read_url:
             return
         self._provider.delete_by_url(read_url, library_id=lib_id)
+
+    def issue_read_url(
+        self,
+        ref: StoredObjectRef,
+        *,
+        library_id: int,
+        ttl_seconds: int,
+    ) -> ReadAccess:
+        lib_id = _validate_library_id(library_id)
+        ttl = _validate_ttl(ttl_seconds)
+        return self._provider.issue_read_url(
+            _validate_object_ref(ref),
+            library_id=lib_id,
+            ttl_seconds=ttl,
+        )
 
     def get_read_url(self, read_url: str, *, library_id: int) -> str:
         lib_id = _validate_library_id(library_id)

@@ -360,6 +360,7 @@ function Dashboard() {
         clips={filteredClips}
         isLoading={isLoading}
         isFetching={isFetchingClips && !isLoading}
+        directMediaUrls={api.demoMode}
         filterSignature={filterSignature}
         emptyKind={emptyKind as "none" | "filtered" | "search"}
         filterLabel={filterLabel}

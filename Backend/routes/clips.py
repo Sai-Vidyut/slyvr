@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -11,12 +11,14 @@ from models import Category, Clip, Person
 from schemas.clip_schema import (
     CategoryResponse,
     ClipListResponse,
+    ClipReadUrlResponse,
     ClipResponse,
     CreateCategoryRequest,
     CreatePersonRequest,
     PersonResponse,
     SearchResponse,
 )
+from services.clip_read_access import issue_clip_read_access
 from services.clip_serializer import serialize_clip, serialize_clips
 from services.clip_service import (
     delete_clip,
@@ -26,6 +28,7 @@ from services.clip_service import (
     resolve_category_in_library,
 )
 from services.search_service import search_clips_ranked
+from services.storage.types import StoragePurpose
 
 router = APIRouter()
 
@@ -72,6 +75,23 @@ def search(
         "clips": serialize_clips(clips),
         "facets": facets,
     }
+
+
+@router.get("/clips/{clip_id}/read-url", response_model=ClipReadUrlResponse)
+def clip_read_url(
+    clip_id: int,
+    purpose: Literal["media", "thumbnail"] = Query(...),
+    ctx: ActiveLibraryContext = Depends(get_active_library_context),
+    db: Session = Depends(get_db),
+):
+    clip = get_clip_by_id(db, clip_id, ctx.library.id)
+    storage_purpose = (
+        StoragePurpose.MEDIA if purpose == "media" else StoragePurpose.THUMBNAIL
+    )
+    access = issue_clip_read_access(
+        clip, library_id=ctx.library.id, purpose=storage_purpose
+    )
+    return {"url": access.url, "expires_at": access.expires_at}
 
 
 @router.get("/clips/{clip_id}", response_model=ClipResponse)

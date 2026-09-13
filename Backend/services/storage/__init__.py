@@ -3,6 +3,7 @@
 from services.storage.service import StorageService, get_storage_service
 from services.storage.types import (
     PROVIDER_AZURE,
+    ReadAccess,
     StoragePurpose,
     StoredObject,
     StoredObjectRef,
@@ -10,6 +11,7 @@ from services.storage.types import (
 
 __all__ = [
     "PROVIDER_AZURE",
+    "ReadAccess",
     "StoragePurpose",
     "StoredObject",
     "StoredObjectRef",

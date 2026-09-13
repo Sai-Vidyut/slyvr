@@ -13,7 +13,9 @@ sys.path.insert(0, str(BACKEND_ROOT))
 
 from services.clip_service import delete_clip
 from services.storage.service import StorageService
-from services.storage.types import PROVIDER_AZURE, StoragePurpose, StoredObject
+from datetime import datetime, timezone
+
+from services.storage.types import PROVIDER_AZURE, ReadAccess, StoragePurpose, StoredObject
 
 _VALID_KEY = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4"
 
@@ -24,6 +26,7 @@ class FakeStorageProvider:
         self.delete_calls: list[tuple[str, int]] = []
         self.delete_object_calls: list[tuple[StoredObject, int]] = []
         self.get_read_calls: list[tuple[str, int]] = []
+        self.issue_read_calls: list[tuple[StoredObject, int, int]] = []
         self.put_should_fail = False
 
     def put_file(
@@ -53,6 +56,19 @@ class FakeStorageProvider:
         if read_url.endswith("/fail"):
             raise RuntimeError("delete failed")
 
+    def issue_read_url(
+        self,
+        ref: StoredObject,
+        *,
+        library_id: int,
+        ttl_seconds: int,
+    ) -> ReadAccess:
+        self.issue_read_calls.append((ref, library_id, ttl_seconds))
+        return ReadAccess(
+            url=f"https://signed.test/{library_id}/{ref.bucket}/{ref.object_key}?sig=fake",
+            expires_at=datetime.now(timezone.utc),
+        )
+
     def get_read_url(self, read_url: str, *, library_id: int) -> str:
         self.get_read_calls.append((read_url, library_id))
         return read_url
@@ -81,6 +97,20 @@ def test_facade_delete_delegates_with_library_id():
     service.delete_by_url("https://fake.test/obj", library_id=7)
 
     assert fake.delete_calls == [("https://fake.test/obj", 7)]
+
+
+def test_facade_issue_read_url_delegates():
+    fake = FakeStorageProvider()
+    service = StorageService(provider=fake)
+    ref = StoredObject(
+        provider=PROVIDER_AZURE,
+        bucket="clips",
+        object_key=_VALID_KEY,
+        read_url="https://fake.test/x",
+    )
+    access = service.issue_read_url(ref, library_id=3, ttl_seconds=900)
+    assert fake.issue_read_calls
+    assert access.url.startswith("https://signed.test/")
 
 
 def test_facade_get_read_url_delegates():
