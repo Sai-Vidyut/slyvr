@@ -179,6 +179,19 @@ def test_invalid_jwt_rejected():
     assert r.status_code == 401
 
 
+def test_unsupported_jwt_algorithm_rejected():
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": "user-a",
+        "email": "a@example.com",
+        "aud": "authenticated",
+        "exp": int((now + timedelta(hours=2)).timestamp()),
+    }
+    token = jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS384")
+    r = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
 def test_personal_library_access_and_isolation():
     _, lib_a = seed_user("user-a", "a@example.com")
     _, lib_b = seed_user("user-b", "b@example.com")

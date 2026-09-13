@@ -16,6 +16,7 @@ def _split_origins(raw: Optional[str]) -> List[str]:
             "http://127.0.0.1:4173",
             "https://buildwsai.com",
             "https://www.buildwsai.com",
+            "https://buildwsai.online",
         ]
     return [part.strip() for part in raw.split(",") if part.strip()]
 
@@ -41,6 +42,11 @@ class Settings:
             os.getenv("SLYVR_AUTH_TEST_MODE", "").strip().lower()
             in {"1", "true", "yes", "on"}
         )
+        raw_max = (os.getenv("SLYVR_MAX_UPLOAD_BYTES") or "").strip()
+        if raw_max.isdigit():
+            self.max_upload_bytes = max(1, int(raw_max))
+        else:
+            self.max_upload_bytes = 2 * 1024 * 1024 * 1024
 
 
 @lru_cache

@@ -12,6 +12,7 @@ import {
 } from "../components/clips/SearchFacetBar";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import { AccountMenu } from "../components/layout/AccountMenu";
 import { LibrarySwitcher } from "../components/library/LibrarySwitcher";
 import { MobileBrowseSheet } from "../components/mobile/MobileBrowseSheet";
 import { MobileWorkspaceChrome } from "../components/mobile/MobileWorkspaceChrome";
@@ -52,6 +53,9 @@ function Dashboard() {
   const reduced = useReducedMotion();
   const isMobile = useIsMobile();
   const { session } = useAuth();
+  const [desktopTopMenu, setDesktopTopMenu] = useState<"library" | "account" | null>(
+    null,
+  );
   const { activeLibraryId, activeLibrary } = useLibrary();
   const [params] = useSearchParams();
   const demoRequested = params.get("demo") === "1";
@@ -440,6 +444,7 @@ function Dashboard() {
           librarySwitcher={
             session && !api.demoMode ? <LibrarySwitcher compact /> : null
           }
+          accountMenu={session && !api.demoMode ? <AccountMenu compact /> : null}
           libraryTitle={libraryTitle}
         >
           {libraryBody}
@@ -506,7 +511,20 @@ function Dashboard() {
           apiButtonCaption={api.apiButtonLabel}
           onApiToggle={() => api.toggle()}
           librarySwitcher={
-            session && !api.demoMode ? <LibrarySwitcher /> : null
+            session && !api.demoMode ? (
+              <LibrarySwitcher
+                open={desktopTopMenu === "library"}
+                onOpenChange={(next) => setDesktopTopMenu(next ? "library" : null)}
+              />
+            ) : null
+          }
+          accountMenu={
+            session && !api.demoMode ? (
+              <AccountMenu
+                open={desktopTopMenu === "account"}
+                onOpenChange={(next) => setDesktopTopMenu(next ? "account" : null)}
+              />
+            ) : null
           }
           uploadDisabled={api.demoMode || !session}
         />

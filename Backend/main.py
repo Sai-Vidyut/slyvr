@@ -20,6 +20,7 @@ from routes.workspaces import router as workspaces_router
 from services.azure_service import upload_file_to_azure
 from services.ffmpeg_service import generate_thumbnail
 from services.metadata_service import extract_media_metadata
+from services.upload_safety import safe_upload_basename
 
 load_dotenv()
 
@@ -87,16 +88,26 @@ async def upload_media(
         uploader_id = ctx.user.id
 
         # Ignore any client-supplied uploader identity; JWT context is authoritative.
-        original_name = video.filename or "upload.bin"
+        original_name = safe_upload_basename(video.filename)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         stored_filename = f"{timestamp}_{original_name}"
         temp_media_path = os.path.join(TEMP_DIR, stored_filename)
+        temp_resolved = os.path.realpath(temp_media_path)
+        temp_root = os.path.realpath(TEMP_DIR)
+        if not temp_resolved.startswith(temp_root + os.sep) and temp_resolved != temp_root:
+            raise HTTPException(status_code=400, detail="Invalid upload filename")
 
+        max_bytes = settings.max_upload_bytes
+        file_size = 0
         with open(temp_media_path, "wb") as buffer:
-            content = await video.read()
-            buffer.write(content)
-
-        file_size = os.path.getsize(temp_media_path)
+            while True:
+                chunk = await video.read(1024 * 1024)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > max_bytes:
+                    raise HTTPException(status_code=413, detail="Upload too large")
+                buffer.write(chunk)
         is_image = _is_image(original_name, video.content_type)
 
         logger.info("Media saved temporarily at %s (image=%s)", temp_media_path, is_image)
@@ -196,7 +207,7 @@ async def upload_media(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error during upload: %s", str(e))
+        logger.exception("Error during upload")
 
         for path in (temp_media_path, temp_thumbnail_path):
             if path and os.path.exists(path):
@@ -205,10 +216,7 @@ async def upload_media(
                 except OSError:
                     pass
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Upload failed: {str(e)}",
-        )
+        raise HTTPException(status_code=500, detail="Upload failed")
 
     finally:
         if db:

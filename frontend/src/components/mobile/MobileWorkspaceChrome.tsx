@@ -54,6 +54,7 @@ type MobileWorkspaceChromeProps = {
   onBrowseOpenChange: (open: boolean) => void;
   activeFilterSummary?: string | null;
   librarySwitcher?: ReactNode;
+  accountMenu?: ReactNode;
   libraryTitle?: string;
 };
 
@@ -82,6 +83,7 @@ export function MobileWorkspaceChrome({
   onBrowseOpenChange,
   activeFilterSummary,
   librarySwitcher,
+  accountMenu,
   libraryTitle = "Library",
 }: MobileWorkspaceChromeProps) {
   const reduced = useReducedMotion();
@@ -142,8 +144,9 @@ export function MobileWorkspaceChrome({
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             {librarySwitcher}
+            {accountMenu}
 
             <m.button
               type="button"
@@ -171,9 +174,9 @@ export function MobileWorkspaceChrome({
               whileTap={reduced || apiTogglePending ? undefined : buttonTap}
               aria-label={mobileApiAriaLabel}
               className={cn(
-                "inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[var(--clip-border)] px-2.5",
+                "inline-flex min-h-11 items-center gap-1 rounded-md px-2",
                 "text-xs outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]",
-                "disabled:opacity-50",
+                "transition-colors hover:bg-[var(--clip-surface)] disabled:opacity-50",
                 apiTone,
               )}
             >

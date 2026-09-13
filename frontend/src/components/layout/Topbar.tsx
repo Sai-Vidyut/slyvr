@@ -11,6 +11,7 @@ import { BorderBeam } from "@/components/ui/border-beam-search";
 import { SearchPulse } from "@/components/ui/search-pulse";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { buttonHover, buttonTap, easeOut, tweenFast } from "@/lib/motion";
+import { topbarControlHeightClass } from "@/lib/topbar-menu-styles";
 import { cn } from "@/lib/utils";
 
 export interface TopbarProps {
@@ -28,6 +29,7 @@ export interface TopbarProps {
   apiButtonCaption?: string;
   onApiToggle?: () => void;
   librarySwitcher?: ReactNode;
+  accountMenu?: ReactNode;
   uploadDisabled?: boolean;
 }
 
@@ -82,18 +84,17 @@ function ApiStatusControl({
       aria-label={statusLabel}
       title={`${statusLabel} · Double-click for demo mode`}
       className={cn(
-        "hidden min-h-10 items-center gap-2 rounded-md border border-[var(--clip-border)] px-2.5 py-1.5",
-        "text-xs text-[var(--clip-muted)] transition-[border-color,background-color,color] duration-150 ease-out",
-        "hover:border-[var(--clip-border-strong)] hover:bg-[var(--clip-surface)] hover:text-[var(--clip-fg)]",
+        topbarControlHeightClass,
+        "hidden items-center gap-1.5 rounded-md px-2",
+        "text-xs transition-colors duration-150 ease-out",
+        "text-[var(--clip-muted)] hover:bg-[var(--clip-surface)] hover:text-[var(--clip-fg)]",
         "outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)] disabled:opacity-50 lg:inline-flex",
         tone,
       )}
     >
-      <ApiStatusIcon state={visualState} className={tone} size={17} />
-      <span className="text-[var(--clip-muted)]" aria-hidden>
-        API
-      </span>
-      <span className="text-[var(--clip-fg)]" aria-hidden>
+      <ApiStatusIcon state={visualState} className={tone} size={16} />
+      <span className="hidden xl:inline text-[var(--clip-muted)]" aria-hidden>API</span>
+      <span className="tabular-nums text-[var(--clip-fg)]" aria-hidden>
         {caption}
       </span>
     </m.button>
@@ -115,6 +116,7 @@ function Topbar({
   apiButtonCaption,
   onApiToggle,
   librarySwitcher,
+  accountMenu,
   uploadDisabled = false,
 }: TopbarProps) {
   const [focused, setFocused] = useState(false);
@@ -122,7 +124,7 @@ function Topbar({
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--clip-border)] bg-[var(--clip-bg)] px-3 md:px-8">
-      <div className="flex h-14 items-center gap-2 md:gap-3">
+      <div className="flex h-14 items-center gap-2 md:gap-2.5">
         <m.button
           type="button"
           onClick={onMenuClick}
@@ -137,7 +139,7 @@ function Topbar({
           <SlyvrBrandLink variant="compact" />
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 lg:max-w-xl xl:max-w-2xl">
           <label
             className="relative block w-full overflow-hidden rounded-md"
             htmlFor="clip-search"
@@ -159,7 +161,8 @@ function Topbar({
               className={cn(
                 // Avoid `.field` here: its `px-3` utility overrides `pl-10`/`pr-11`
                 // and collapses text onto the leading search icon.
-                "relative z-0 w-full rounded-md border bg-[var(--clip-bg-elevated)] py-2.5 pl-10 pr-11 text-sm",
+                topbarControlHeightClass,
+                "relative z-0 w-full rounded-md border bg-[var(--clip-bg-elevated)] py-0 pl-10 pr-11 text-sm",
                 "placeholder:text-[var(--clip-muted)]",
                 "transition-[border-color] duration-200",
                 "focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]",
@@ -215,7 +218,7 @@ function Topbar({
           </label>
         </div>
 
-        <div className="ml-1 flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1 md:gap-1.5">
           {librarySwitcher}
 
           <ApiStatusControl
@@ -232,7 +235,12 @@ function Topbar({
             disabled={isRefreshing}
             whileHover={reduced || isRefreshing ? undefined : buttonHover}
             whileTap={reduced || isRefreshing ? undefined : buttonTap}
-            className="hidden min-h-10 min-w-10 items-center justify-center rounded-md border border-[var(--clip-border)] hover:border-[var(--clip-border-strong)] disabled:opacity-45 md:flex"
+            className={cn(
+              topbarControlHeightClass,
+              "hidden min-w-10 items-center justify-center rounded-md text-[var(--clip-muted)]",
+              "transition-colors duration-150 hover:bg-[var(--clip-surface)] hover:text-[var(--clip-fg)]",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)] disabled:opacity-45 md:inline-flex",
+            )}
             aria-label="Refresh clips"
           >
             <RefreshCw
@@ -248,12 +256,18 @@ function Topbar({
             disabled={uploadDisabled}
             whileHover={reduced || uploadDisabled ? undefined : buttonHover}
             whileTap={reduced || uploadDisabled ? undefined : buttonTap}
-            className="flex min-h-10 items-center gap-2 rounded-md bg-[var(--clip-accent)] px-3.5 text-sm font-medium text-[var(--clip-accent-fg)] disabled:opacity-45"
+            className={cn(
+              topbarControlHeightClass,
+              "flex items-center gap-2 rounded-md bg-[var(--clip-accent)] px-3.5 text-sm font-medium text-[var(--clip-accent-fg)]",
+              "shadow-[0_1px_0_oklch(1_0_0_/_0.06)_inset] disabled:opacity-45",
+            )}
             aria-label="Upload clips"
           >
             <Upload size={17} aria-hidden />
-            <span className="hidden md:inline">Upload</span>
+            <span className="hidden sm:inline">Upload</span>
           </m.button>
+
+          {accountMenu}
         </div>
       </div>
     </header>
