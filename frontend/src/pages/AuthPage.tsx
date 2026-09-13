@@ -1,4 +1,4 @@
-import { type FormEvent, useId, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, m } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
@@ -6,6 +6,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { MotionButton } from "@/components/ui/motion-button";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { pageEnter, tweenFast, tweenMicro } from "@/lib/motion";
+import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/auth-provider";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -20,7 +21,10 @@ type AuthIssueKind =
   | "generic"
   | null;
 
+type SignupPhase = "form" | "check-email";
+
 const HERO_SRC = `${import.meta.env.BASE_URL}landing/hero-workspace.jpg`;
+const RESEND_COOLDOWN_MS = 60_000;
 
 function authErrorCode(err: unknown): string {
   if (!err || typeof err !== "object") return "";
@@ -41,7 +45,7 @@ function classifyAuthError(err: unknown): { message: string; kind: AuthIssueKind
     return {
       kind: "unconfirmed",
       message:
-        "Confirm your email before signing in. Check your inbox for a confirmation link from Slyvr.",
+        "Confirm your email before signing in. Check your inbox for the confirmation link, or resend it.",
     };
   }
   if (
@@ -108,6 +112,8 @@ export default function AuthPage({ mode }: { mode: Mode }) {
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resending, setResending] = useState(false);
+  const [signupPhase, setSignupPhase] = useState<SignupPhase>("form");
+  const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<AuthIssueKind>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -123,14 +129,31 @@ export default function AuthPage({ mode }: { mode: Mode }) {
   const nameId = `${formId}-name`;
   const errorId = `${formId}-error`;
   const infoId = `${formId}-info`;
-
   const isLogin = mode === "login";
-  const title = isLogin ? "Welcome back." : "Create your library.";
-  const support = isLogin
-    ? "Sign in to your private archive and shared workspaces."
-    : "Your personal library is created automatically.";
+  const isCheckEmail = !isLogin && signupPhase === "check-email";
+  const title = isCheckEmail
+    ? "Check your email"
+    : isLogin
+      ? "Welcome back."
+      : "Create your library.";
+  const support = isCheckEmail
+    ? `We sent a confirmation link to ${email.trim() || "your email"}. Click it to verify your account.`
+    : isLogin
+      ? "Sign in to your private archive and shared workspaces."
+      : "Your personal library is created automatically.";
   const submitLabel = isLogin ? "Sign in" : "Create account";
   const busy = submitting || resetting || resending;
+  const [cooldownNow, setCooldownNow] = useState(() => Date.now());
+  const resendCooldownMs =
+    resendAvailableAt != null ? Math.max(0, resendAvailableAt - cooldownNow) : 0;
+  const resendOnCooldown = resendCooldownMs > 0;
+
+  useEffect(() => {
+    if (!resendOnCooldown) return;
+    const id = window.setInterval(() => setCooldownNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [resendOnCooldown, resendAvailableAt]);
+
   const fieldInvalid =
     errorKind === "credentials" ||
     errorKind === "unconfirmed" ||
@@ -162,10 +185,17 @@ export default function AuthPage({ mode }: { mode: Mode }) {
         navigate(nextPath, { replace: true });
       } else {
         await signUp(email.trim(), password, displayName.trim() || undefined);
-        setInfo(
-          "Account created. If email confirmation is enabled, check your inbox—then sign in.",
-        );
-        navigate(nextPath, { replace: true });
+        const supabase = getSupabase();
+        const { data: sessionData } = await supabase?.auth.getSession() ?? {
+          data: { session: null },
+        };
+        if (sessionData.session) {
+          navigate(nextPath, { replace: true });
+          return;
+        }
+        setSignupPhase("check-email");
+        setResendAvailableAt(Date.now() + RESEND_COOLDOWN_MS);
+        setInfo(null);
       }
     } catch (err) {
       const classified = classifyAuthError(err);
@@ -204,12 +234,13 @@ export default function AuthPage({ mode }: { mode: Mode }) {
 
   async function onResendConfirmation() {
     const trimmed = email.trim();
-    if (!trimmed || !configured) return;
+    if (!trimmed || !configured || resendOnCooldown) return;
     setResending(true);
     setInfo(null);
     try {
       await resendSignupConfirmation(trimmed);
-      setInfo("Confirmation email resent. Check your inbox, then sign in.");
+      setResendAvailableAt(Date.now() + RESEND_COOLDOWN_MS);
+      setInfo("Confirmation email resent. Check your inbox.");
       setError(null);
       setErrorKind(null);
     } catch (err) {
@@ -339,10 +370,14 @@ export default function AuthPage({ mode }: { mode: Mode }) {
               <button
                 type="button"
                 onClick={() => void onResendConfirmation()}
-                disabled={busy || !email.trim()}
+                disabled={busy || !email.trim() || resendOnCooldown}
                 className="mt-2 text-[12px] font-medium text-[var(--clip-fg)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)] disabled:opacity-50"
               >
-                {resending ? "Resending…" : "Resend confirmation email"}
+                {resending
+                  ? "Resending…"
+                  : resendOnCooldown
+                    ? `Resend email (${Math.ceil(resendCooldownMs / 1000)}s)`
+                    : "Resend confirmation email"}
               </button>
             ) : null}
           </m.div>
@@ -374,17 +409,89 @@ export default function AuthPage({ mode }: { mode: Mode }) {
     </form>
   );
 
+  const checkEmailPanel = (
+    <div
+      className="flex w-full flex-col gap-3.5"
+      aria-describedby={
+        [error ? errorId : null, info ? infoId : null].filter(Boolean).join(" ") || undefined
+      }
+    >
+      <AnimatePresence initial={false}>
+        {error ? (
+          <m.div
+            key="auth-error"
+            id={errorId}
+            role="alert"
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduced ? undefined : { opacity: 0 }}
+            transition={reduced ? { duration: 0 } : tweenMicro}
+          >
+            <p className="text-[13px] leading-snug text-[oklch(0.78_0.06_25)]">{error}</p>
+          </m.div>
+        ) : null}
+        {info ? (
+          <m.p
+            key="auth-info"
+            id={infoId}
+            role="status"
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduced ? undefined : { opacity: 0 }}
+            transition={reduced ? { duration: 0 } : tweenFast}
+            className="text-[13px] leading-snug text-[var(--clip-muted)]"
+          >
+            {info}
+          </m.p>
+        ) : null}
+      </AnimatePresence>
+
+      <p className="text-[13px] text-[var(--clip-muted)]">
+        Didn&apos;t get it?{" "}
+        <button
+          type="button"
+          onClick={() => void onResendConfirmation()}
+          disabled={busy || !email.trim() || resendOnCooldown}
+          className="font-medium text-[var(--clip-fg)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)] disabled:opacity-50"
+        >
+          {resending
+            ? "Sending…"
+            : resendOnCooldown
+              ? `Resend email (${Math.ceil(resendCooldownMs / 1000)}s)`
+              : "Resend confirmation email"}
+        </button>
+      </p>
+    </div>
+  );
+
+  const activeForm = isCheckEmail ? checkEmailPanel : form;
+
   const altLinks = (
     <div className="mt-6 space-y-2 text-[13px] leading-snug text-[var(--clip-muted)]">
-      <p>
-        {isLogin ? "New to Slyvr? " : "Already have an account? "}
-        <Link
-          to={isLogin ? "/signup" : "/login"}
-          className="font-medium text-[var(--clip-fg)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
-        >
-          {isLogin ? "Create an account" : "Sign in"}
-        </Link>
-      </p>
+      {isCheckEmail ? (
+        <p>
+          <button
+            type="button"
+            onClick={() => {
+              setSignupPhase("form");
+              clearMessages();
+            }}
+            className="font-medium text-[var(--clip-fg)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
+          >
+            Back to signup
+          </button>
+        </p>
+      ) : (
+        <p>
+          {isLogin ? "New to Slyvr? " : "Already have an account? "}
+          <Link
+            to={isLogin ? "/signup" : "/login"}
+            className="font-medium text-[var(--clip-fg)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
+          >
+            {isLogin ? "Create an account" : "Sign in"}
+          </Link>
+        </p>
+      )}
       <p>
         Prefer to explore first?{" "}
         <Link
@@ -430,7 +537,7 @@ export default function AuthPage({ mode }: { mode: Mode }) {
           <h1 className="text-[1.75rem] font-medium tracking-tight">{title}</h1>
           <p className="mt-2 text-[14px] leading-relaxed text-[var(--clip-muted)]">{support}</p>
           <div className="mt-7">
-            {form}
+            {activeForm}
             {altLinks}
           </div>
         </m.main>
@@ -481,7 +588,7 @@ export default function AuthPage({ mode }: { mode: Mode }) {
           <h1 className="text-[1.85rem] font-medium tracking-tight xl:text-[2rem]">{title}</h1>
           <p className="mt-2.5 text-[14px] leading-relaxed text-[var(--clip-muted)]">{support}</p>
           <div className="mt-8">
-            {form}
+            {activeForm}
             {altLinks}
           </div>
         </m.div>

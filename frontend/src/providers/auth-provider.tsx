@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
+import { getEmailConfirmationRedirectUrl } from "@/lib/auth-redirect";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 
 type AuthContextValue = {
@@ -63,10 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, displayName?: string) => {
       const supabase = getSupabase();
       if (!supabase) throw new Error("Authentication is not configured");
+      const emailRedirectTo = getEmailConfirmationRedirectUrl();
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo,
           data: displayName ? { display_name: displayName } : undefined,
         },
       });
@@ -86,7 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resendSignupConfirmation = useCallback(async (email: string) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error("Authentication is not configured");
-    const { error } = await supabase.auth.resend({ type: "signup", email });
+    const emailRedirectTo = getEmailConfirmationRedirectUrl();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo },
+    });
     if (error) throw error;
   }, []);
 
