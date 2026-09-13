@@ -151,7 +151,7 @@ Path alias `@/` → `frontend/src` (Vite).
 | `metadata_service.py` | ExifTool JSON + ffprobe → structured metadata |
 | `search_service.py` | Candidate SQL + RapidFuzz scoring + facets |
 | `ffmpeg_service.py` | Video thumbnail via FFmpeg |
-| `azure_service.py` | Blob upload/delete |
+| `storage/*` + `azure_service.py` | Storage facade; Azure Blob upload/delete (first provider) |
 | `exif_service.py` | Legacy narrow ExifTool helper (upload uses `metadata_service`) |
 | `clip_service.py` | CRUD helpers; legacy ILIKE `search_clips` retained |
 

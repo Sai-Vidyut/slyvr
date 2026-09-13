@@ -58,7 +58,7 @@ Current API has **no** auth.
 
 ### Storage abstraction
 
-Interface over Azure (and later S3/local). Current code talks to Azure directly via `azure_service.py`.
+Provider interface lives under `Backend/services/storage/`; Azure is the first implementation via `azure_service.py`. Future: S3/R2, OAuth-backed consumer storage, and managed Slyvr Storage as additional providers.
 
 ### Metadata normalization
 

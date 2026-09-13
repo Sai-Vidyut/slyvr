@@ -17,8 +17,8 @@ from models import Clip, Person
 from routes.clips import router as clips_router
 from routes.me import router as me_router
 from routes.workspaces import router as workspaces_router
-from services.azure_service import upload_file_to_azure
 from services.ffmpeg_service import generate_thumbnail
+from services.storage import StoragePurpose, get_storage_service
 from services.metadata_service import extract_media_metadata
 from services.upload_safety import safe_upload_basename
 
@@ -133,8 +133,17 @@ async def upload_media(
         temp_thumbnail_path = _prepare_thumbnail(temp_media_path, is_image)
         logger.info("Thumbnail prepared at %s", temp_thumbnail_path)
 
-        media_blob_url = upload_file_to_azure(temp_media_path, "clips")
-        thumbnail_blob_url = upload_file_to_azure(temp_thumbnail_path, "thumbnails")
+        storage = get_storage_service()
+        media_blob_url = storage.upload_file(
+            temp_media_path,
+            library_id=library_id,
+            purpose=StoragePurpose.MEDIA,
+        )
+        thumbnail_blob_url = storage.upload_file(
+            temp_thumbnail_path,
+            library_id=library_id,
+            purpose=StoragePurpose.THUMBNAIL,
+        )
 
         structured = extracted.get("metadata")
         metadata_json = json.dumps(structured) if structured else None

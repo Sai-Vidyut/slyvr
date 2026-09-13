@@ -5,7 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from models import Category, Clip, Person
-from services.azure_service import delete_blob_from_azure
+from services.storage import get_storage_service
 
 
 def get_all_clips(db: Session, library_id: int) -> List[Clip]:
@@ -135,15 +135,16 @@ def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
             detail="Clip not found",
         )
 
+    storage = get_storage_service()
     try:
         if clip.blob_url:
-            delete_blob_from_azure(clip.blob_url)
+            storage.delete_by_url(clip.blob_url, library_id=library_id)
     except Exception as e:
         print(f"Failed to delete video blob: {e}")
 
     try:
         if clip.thumbnail_url:
-            delete_blob_from_azure(clip.thumbnail_url)
+            storage.delete_by_url(clip.thumbnail_url, library_id=library_id)
     except Exception as e:
         print(f"Failed to delete thumbnail blob: {e}")
 

@@ -76,11 +76,11 @@ Decisions evidenced by the **current** Slyvr codebase. Inferred items are labele
 
 ---
 
-### Azure Blob Storage
+### Object storage (Azure first provider)
 
-**Decision:** Media and thumbnails stored in Azure Blob (`AZURE_CONNECTION_STRING`).  
-**Why:** Offloads binary storage from the API host.  
-**Consequence:** Local demos require Azure (or a future storage abstraction).
+**Decision:** Media and thumbnails stored in object storage; clips keep `blob_url` / `thumbnail_url`. The runtime uses `Backend/services/storage/` with an Azure Blob adapter (`AZURE_CONNECTION_STRING`).  
+**Why:** Offloads binary storage from the API host while allowing additional providers later without changing the clip API.  
+**Consequence:** Local uploads still require Azure configuration until another provider is implemented.
 
 ---
 
