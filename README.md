@@ -43,6 +43,23 @@ This repository is a reproducible checkpoint of the current working application 
 
 ## Local development
 
+### One-command launcher
+
+From the repository root (any working directory is fine if you invoke the script by path):
+
+```bash
+./scripts/dev.sh
+```
+
+Stop with **Ctrl+C** (the script shuts down both servers and avoids leaving orphaned processes).
+
+This starts:
+
+- **FastAPI** on http://127.0.0.1:8000 (existing `Backend/venv`, with reload)
+- **Vite** on http://127.0.0.1:5173 (existing dev server and `/api` proxy to the backend)
+
+Prerequisites: `Backend/venv`, `frontend/node_modules`, and Node/npm (the launcher prepends the user-local Node 22 install when present).
+
 ### Backend
 
 ```bash
