@@ -7,6 +7,9 @@ from datetime import datetime
 from enum import Enum
 
 PROVIDER_AZURE = "azure"
+PROVIDER_B2 = "b2"
+
+STRUCTURED_STORAGE_PROVIDERS = frozenset({PROVIDER_AZURE, PROVIDER_B2})
 
 
 class StoragePurpose(str, Enum):

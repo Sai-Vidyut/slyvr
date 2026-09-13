@@ -5,30 +5,70 @@ from __future__ import annotations
 from typing import Optional
 
 from models import Clip
+from services.storage import b2_config
 from services.storage.object_keys import parse_slyvr_azure_blob_url_for_signing
-from services.storage.types import PROVIDER_AZURE, StoragePurpose, StoredObjectRef
+from services.storage.types import (
+    PROVIDER_AZURE,
+    PROVIDER_B2,
+    STRUCTURED_STORAGE_PROVIDERS,
+    StoragePurpose,
+    StoredObjectRef,
+)
+
+
+def _bucket_for_structured_ref(provider: str, purpose: StoragePurpose) -> Optional[str]:
+    if provider == PROVIDER_AZURE:
+        return purpose.value
+    if provider == PROVIDER_B2:
+        if not b2_config.is_b2_configured():
+            return None
+        return b2_config.bucket_for_purpose(purpose)
+    return None
 
 
 def clip_media_ref(clip: Clip) -> Optional[StoredObjectRef]:
-    if clip.storage_provider != PROVIDER_AZURE or not clip.media_object_key:
+    if clip.storage_provider not in STRUCTURED_STORAGE_PROVIDERS or not clip.media_object_key:
+        return None
+    bucket = _bucket_for_structured_ref(clip.storage_provider, StoragePurpose.MEDIA)
+    if not bucket:
         return None
     return StoredObjectRef(
         provider=clip.storage_provider,
-        bucket=StoragePurpose.MEDIA.value,
+        bucket=bucket,
         object_key=clip.media_object_key,
         read_url=clip.blob_url or "",
     )
 
 
 def clip_thumbnail_ref(clip: Clip) -> Optional[StoredObjectRef]:
-    if clip.storage_provider != PROVIDER_AZURE or not clip.thumbnail_object_key:
+    if (
+        clip.storage_provider not in STRUCTURED_STORAGE_PROVIDERS
+        or not clip.thumbnail_object_key
+    ):
+        return None
+    bucket = _bucket_for_structured_ref(clip.storage_provider, StoragePurpose.THUMBNAIL)
+    if not bucket:
         return None
     return StoredObjectRef(
         provider=clip.storage_provider,
-        bucket=StoragePurpose.THUMBNAIL.value,
+        bucket=bucket,
         object_key=clip.thumbnail_object_key,
         read_url=clip.thumbnail_url or "",
     )
+
+
+def clip_has_b2_structured_key(clip: Clip, purpose: StoragePurpose) -> bool:
+    """True when the clip row declares a B2 structured object key for the purpose."""
+    if clip.storage_provider != PROVIDER_B2:
+        return False
+    if purpose == StoragePurpose.MEDIA:
+        return bool(clip.media_object_key)
+    return bool(clip.thumbnail_object_key)
+
+
+def b2_structured_storage_unconfigured(clip: Clip, purpose: StoragePurpose) -> bool:
+    """B2 structured object present in DB but server B2 credentials/buckets are missing."""
+    return clip_has_b2_structured_key(clip, purpose) and not b2_config.is_b2_configured()
 
 
 def stored_url_for_purpose(clip: Clip, purpose: StoragePurpose) -> Optional[str]:
@@ -69,6 +109,14 @@ def resolve_stored_object_ref_for_read(
     structured = structured_ref_for_purpose(clip, purpose)
     if structured:
         return structured
+
+    if b2_structured_storage_unconfigured(clip, purpose):
+        raise ValueError(
+            "Backblaze B2 is not fully configured for structured clip media reads"
+        )
+
+    if clip.storage_provider == PROVIDER_B2:
+        return None
 
     url = stored_url_for_purpose(clip, purpose)
     if not url:

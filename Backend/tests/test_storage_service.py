@@ -131,11 +131,17 @@ def test_facade_rejects_invalid_library_id():
         service.upload_file("/tmp/x", library_id=0, purpose=StoragePurpose.MEDIA)
 
 
-def test_default_provider_is_azure_adapter():
-    service = StorageService()
-    from services.storage.azure_provider import AzureBlobStorageProvider
+def test_default_provider_is_routing_adapter():
+    from services.storage.routing_provider import RoutingStorageProvider
 
-    assert isinstance(service.provider, AzureBlobStorageProvider)
+    with patch(
+        "services.azure_service.AZURE_CONNECTION_STRING",
+        "DefaultEndpointsProtocol=https;AccountName=x;AccountKey=y==",
+    ):
+        service = StorageService()
+
+    assert isinstance(service.provider, RoutingStorageProvider)
+    assert service.provider.write_provider_name == PROVIDER_AZURE
 
 
 def test_azure_provider_put_delegates_to_azure_service():

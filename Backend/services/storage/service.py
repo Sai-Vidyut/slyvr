@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Optional
 
-from services.storage.azure_provider import AzureBlobStorageProvider
+from services.storage.factory import build_routing_storage_provider
 from services.storage.object_keys import is_valid_object_key
 from services.storage.protocol import StorageProvider
 from services.storage.types import ReadAccess, StoragePurpose, StoredObjectRef
@@ -35,7 +35,7 @@ def _validate_ttl(ttl_seconds: int) -> int:
 
 class StorageService:
     def __init__(self, provider: Optional[StorageProvider] = None) -> None:
-        self._provider: StorageProvider = provider or AzureBlobStorageProvider()
+        self._provider: StorageProvider = provider or build_routing_storage_provider()
 
     @property
     def provider(self) -> StorageProvider:

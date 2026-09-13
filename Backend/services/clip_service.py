@@ -5,8 +5,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from models import Category, Clip, Person
-from services.clip_storage_refs import clip_media_ref, clip_thumbnail_ref
+from services.clip_storage_refs import clip_has_b2_structured_key, clip_media_ref, clip_thumbnail_ref
 from services.storage import get_storage_service
+from services.storage.types import StoragePurpose
 
 
 def get_all_clips(db: Session, library_id: int) -> List[Clip]:
@@ -143,7 +144,7 @@ def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
     try:
         if media_ref:
             storage.delete_object(media_ref, library_id=library_id)
-        elif clip.blob_url:
+        elif clip.blob_url and not clip_has_b2_structured_key(clip, StoragePurpose.MEDIA):
             storage.delete_by_url(clip.blob_url, library_id=library_id)
     except Exception as e:
         print(f"Failed to delete video blob: {e}")
@@ -151,7 +152,9 @@ def delete_clip(db: Session, clip_id: int, library_id: int) -> None:
     try:
         if thumb_ref:
             storage.delete_object(thumb_ref, library_id=library_id)
-        elif clip.thumbnail_url:
+        elif clip.thumbnail_url and not clip_has_b2_structured_key(
+            clip, StoragePurpose.THUMBNAIL
+        ):
             storage.delete_by_url(clip.thumbnail_url, library_id=library_id)
     except Exception as e:
         print(f"Failed to delete thumbnail blob: {e}")

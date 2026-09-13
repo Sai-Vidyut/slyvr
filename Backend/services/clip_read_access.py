@@ -28,10 +28,16 @@ def issue_clip_read_access(clip: Clip, *, library_id: int, purpose: StoragePurpo
     E) Missing URL and no resolvable ref → 404.
     """
     settings = get_settings()
-    storage = get_storage_service()
-    ref = resolve_stored_object_ref_for_read(clip, purpose)
+    try:
+        ref = resolve_stored_object_ref_for_read(clip, purpose)
+    except ValueError:
+        raise HTTPException(
+            status_code=503,
+            detail="Clip media storage is temporarily unavailable",
+        ) from None
 
     if ref is not None:
+        storage = get_storage_service()
         return storage.issue_read_url(
             ref,
             library_id=library_id,

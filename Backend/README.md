@@ -124,7 +124,7 @@ pip install -r requirements.txt
 Create a `.env` file inside Backend and configure:
 
 ```env
-AZURE_STORAGE_CONNECTION_STRING=
+AZURE_CONNECTION_STRING=
 AZURE_CONTAINER_NAME=
 ```
 
