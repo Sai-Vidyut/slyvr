@@ -3,17 +3,9 @@ import { m } from "framer-motion";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { tweenMicro } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import type { SearchFacets } from "@/types/clip";
+import type { ActiveSearchFacets, SearchFacetKey, SearchFacets } from "@/types/clip";
 
-export type SearchFacetKey =
-  | "person"
-  | "category"
-  | "device"
-  | "year"
-  | "location"
-  | "file_type";
-
-export type ActiveSearchFacets = Partial<Record<SearchFacetKey, string>>;
+export type { ActiveSearchFacets, SearchFacetKey };
 
 const FACET_CONFIG: {
   key: SearchFacetKey;
@@ -26,6 +18,10 @@ const FACET_CONFIG: {
   { key: "year", label: "Years", facetKey: "years" },
   { key: "location", label: "Locations", facetKey: "locations" },
   { key: "file_type", label: "Type", facetKey: "file_types" },
+  { key: "media_kind", label: "Media", facetKey: "media_kinds" },
+  { key: "has_gps", label: "Location data", facetKey: "has_gps" },
+  { key: "lens_model", label: "Lens", facetKey: "lens_models" },
+  { key: "video_codec", label: "Video codec", facetKey: "video_codecs" },
 ];
 
 type Props = {

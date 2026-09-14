@@ -53,6 +53,10 @@ export const searchClips = async (params: SearchParams): Promise<SearchResponse>
       year: params.year || undefined,
       location: params.location || undefined,
       file_type: params.file_type || undefined,
+      media_kind: params.media_kind || undefined,
+      has_gps: params.has_gps === true ? true : undefined,
+      lens_model: params.lens_model || undefined,
+      video_codec: params.video_codec || undefined,
     },
   });
   return response.data;

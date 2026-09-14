@@ -202,6 +202,10 @@ export interface SearchFacets {
   years?: string[];
   locations?: string[];
   file_types?: string[];
+  media_kinds?: string[];
+  lens_models?: string[];
+  video_codecs?: string[];
+  has_gps?: string[];
 }
 
 export interface SearchResponse {
@@ -217,6 +221,10 @@ export interface SearchParams {
   year?: string;
   location?: string;
   file_type?: string;
+  media_kind?: string;
+  has_gps?: boolean;
+  lens_model?: string;
+  video_codec?: string;
 }
 
 export interface UpdateClipPayload {
@@ -227,4 +235,54 @@ export interface UpdateClipPayload {
 
 export interface HealthResponse {
   status: string;
+}
+
+export type SearchFacetKey =
+  | "person"
+  | "category"
+  | "device"
+  | "year"
+  | "location"
+  | "file_type"
+  | "media_kind"
+  | "has_gps"
+  | "lens_model"
+  | "video_codec";
+
+export type ActiveSearchFacets = Partial<Record<SearchFacetKey, string>>;
+
+const SEARCH_FACET_SECTION_LABELS: Record<SearchFacetKey, string> = {
+  person: "People",
+  category: "Categories",
+  device: "Devices",
+  year: "Years",
+  location: "Locations",
+  file_type: "Type",
+  media_kind: "Media",
+  has_gps: "Location data",
+  lens_model: "Lens",
+  video_codec: "Video codec",
+};
+
+export function searchFacetChipLabel(key: SearchFacetKey, value: string): string {
+  return `${SEARCH_FACET_SECTION_LABELS[key]}: ${value}`;
+}
+
+export function metadataParamsFromFacets(
+  facets: ActiveSearchFacets,
+): Pick<SearchParams, "media_kind" | "has_gps" | "lens_model" | "video_codec"> {
+  const mediaLabel = facets.media_kind;
+  let media_kind: string | undefined;
+  if (mediaLabel === "Photo") {
+    media_kind = "photo";
+  } else if (mediaLabel === "Video") {
+    media_kind = "video";
+  }
+
+  return {
+    media_kind,
+    has_gps: facets.has_gps === "With location data" ? true : undefined,
+    lens_model: facets.lens_model,
+    video_codec: facets.video_codec,
+  };
 }

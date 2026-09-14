@@ -25,6 +25,7 @@ import {
   useClipsQuery,
   usePeopleQuery,
   useSearchClipsQuery,
+  hasActiveSearchParams,
 } from "@/hooks/use-clips-queries";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useLibrary } from "@/providers/library-provider";
 import type { Clip, SearchParams } from "@/types/clip";
+import { metadataParamsFromFacets, searchFacetChipLabel } from "@/types/clip";
 
 function formatStorage(bytes: number) {
   if (bytes >= 1_000_000_000) {
@@ -88,8 +90,6 @@ function Dashboard() {
     setSearchFacets({});
   }
 
-  const isSearchActive = debouncedSearch.trim().length > 0;
-
   const searchParams: SearchParams = useMemo(
     () => ({
       q: debouncedSearch.trim(),
@@ -103,6 +103,7 @@ function Dashboard() {
       year: searchFacets.year,
       location: searchFacets.location,
       file_type: searchFacets.file_type,
+      ...metadataParamsFromFacets(searchFacets),
     }),
     [
       debouncedSearch,
@@ -111,6 +112,8 @@ function Dashboard() {
       selectedPerson,
     ],
   );
+
+  const isSearchActive = hasActiveSearchParams(searchParams);
 
   const apiQueriesEnabled =
     Boolean(session) && api.connectionEnabled && !api.demoMode;
@@ -285,12 +288,11 @@ function Dashboard() {
         initial={reduced ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
       >
-        {isSearchActive && (
+        {debouncedSearch.trim().length > 0 && (
           <FilterChip
             label={`Search: ${debouncedSearch.trim()}`}
             onClear={() => {
               setSearchQuery("");
-              setSearchFacets({});
             }}
           />
         )}
@@ -298,7 +300,7 @@ function Dashboard() {
           value ? (
             <FilterChip
               key={key}
-              label={`${key}: ${value}`}
+              label={searchFacetChipLabel(key as SearchFacetKey, value)}
               onClear={() => handleFacetChange(key as SearchFacetKey, null)}
             />
           ) : null,

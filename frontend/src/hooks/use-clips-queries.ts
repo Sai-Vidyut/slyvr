@@ -25,6 +25,24 @@ import {
   updateClip,
 } from "@/services/api";
 
+export function hasActiveSearchParams(params: SearchParams): boolean {
+  if (params.q.trim().length > 0) {
+    return true;
+  }
+  return Boolean(
+    params.person ||
+      params.category ||
+      params.device ||
+      params.year ||
+      params.location ||
+      params.file_type ||
+      params.media_kind ||
+      params.has_gps === true ||
+      params.lens_model ||
+      params.video_codec,
+  );
+}
+
 export function useCategoriesQuery(enabled = true) {
   const { activeLibraryId } = useLibrary();
   return useQuery({
@@ -63,11 +81,16 @@ export function useSearchClipsQuery(params: SearchParams, enabled: boolean) {
     year: params.year ?? "",
     location: params.location ?? "",
     file_type: params.file_type ?? "",
+    media_kind: params.media_kind ?? "",
+    has_gps: params.has_gps === true ? "1" : "",
+    lens_model: params.lens_model ?? "",
+    video_codec: params.video_codec ?? "",
   };
   return useQuery({
     queryKey: queryKeys.clips.search(activeLibraryId, keyParams),
     queryFn: () => searchClips(params),
-    enabled: enabled && activeLibraryId != null && params.q.trim().length > 0,
+    enabled:
+      enabled && activeLibraryId != null && hasActiveSearchParams(params),
   });
 }
 
