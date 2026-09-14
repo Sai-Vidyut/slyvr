@@ -1,5 +1,5 @@
 import { m } from "framer-motion";
-import { Calendar, Camera, Loader2, MapPin, Users } from "lucide-react";
+import { Loader2, Users } from "lucide-react";
 import { useState } from "react";
 
 import { MotionButton } from "@/components/ui/motion-button";
@@ -160,35 +160,6 @@ export function ClipInspectorForm({
             </div>
           </m.div>
         )}
-
-        <m.div
-          variants={fadeUp}
-          className="space-y-2 border-t border-[var(--clip-border)] pt-4 text-sm text-[var(--clip-muted)]"
-        >
-          {clip.camera_model && (
-            <div className="flex items-center gap-2">
-              <Camera size={16} aria-hidden />
-              {[clip.camera_make, clip.camera_model].filter(Boolean).join(" ")}
-            </div>
-          )}
-          {clip.latitude != null && clip.longitude != null && (
-            <div className="flex items-center gap-2">
-              <MapPin size={16} aria-hidden />
-              {clip.latitude.toFixed(4)}, {clip.longitude.toFixed(4)}
-            </div>
-          )}
-          {clip.uploaded_at && (
-            <div className="flex items-center gap-2">
-              <Calendar size={16} aria-hidden />
-              {new Date(clip.uploaded_at).toLocaleString()}
-            </div>
-          )}
-          {clip.file_size != null && clip.file_size > 0 && (
-            <p className="text-meta">
-              {(clip.file_size / (1024 * 1024)).toFixed(2)} MB
-            </p>
-          )}
-        </m.div>
 
         <m.div variants={fadeUp}>
           <ClipMetadataSections clip={clip} />
