@@ -57,6 +57,10 @@ def search(
     year: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
     file_type: Optional[str] = Query(None),
+    media_kind: Optional[str] = Query(None),
+    has_gps: Optional[bool] = Query(None),
+    lens_model: Optional[str] = Query(None),
+    video_codec: Optional[str] = Query(None),
     ctx: ActiveLibraryContext = Depends(get_active_library_context),
     db: Session = Depends(get_db),
 ):
@@ -70,6 +74,10 @@ def search(
         year=year,
         location=location,
         file_type=file_type,
+        media_kind=media_kind,
+        has_gps=has_gps,
+        lens_model=lens_model,
+        video_codec=video_codec,
     )
     return {
         "clips": serialize_clips(clips),

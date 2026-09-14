@@ -92,6 +92,10 @@ class SearchFacets(BaseModel):
     years: List[str] = Field(default_factory=list)
     locations: List[str] = Field(default_factory=list)
     file_types: List[str] = Field(default_factory=list)
+    media_kinds: List[str] = Field(default_factory=list)
+    lens_models: List[str] = Field(default_factory=list)
+    video_codecs: List[str] = Field(default_factory=list)
+    has_gps: List[str] = Field(default_factory=list)
 
 
 class SearchResponse(BaseModel):
