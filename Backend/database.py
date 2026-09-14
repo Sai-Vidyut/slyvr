@@ -39,6 +39,14 @@ _CLIP_COLUMN_MIGRATIONS = [
     ("storage_provider", "VARCHAR(32)"),
     ("media_object_key", "VARCHAR(512)"),
     ("thumbnail_object_key", "VARCHAR(512)"),
+    ("media_kind", "VARCHAR(16)"),
+    ("lens_model", "VARCHAR(255)"),
+    ("iso", "INTEGER"),
+    ("video_codec", "VARCHAR(64)"),
+    ("audio_codec", "VARCHAR(64)"),
+    ("has_gps", "INTEGER"),
+    ("capture_timezone_offset", "VARCHAR(32)"),
+    ("software", "VARCHAR(255)"),
 ]
 
 _CATEGORY_COLUMN_MIGRATIONS = [
@@ -50,6 +58,18 @@ _PERSON_COLUMN_MIGRATIONS = [
 ]
 
 LEGACY_LIBRARY_NAME = "Legacy Development"
+
+
+def _ensure_clip_metadata_indexes(conn) -> None:
+    """Indexes for metadata faceting (idempotent on SQLite)."""
+    for ddl in (
+        "CREATE INDEX IF NOT EXISTS idx_clips_library_media_kind ON clips (library_id, media_kind)",
+        "CREATE INDEX IF NOT EXISTS idx_clips_library_has_gps ON clips (library_id, has_gps)",
+        "CREATE INDEX IF NOT EXISTS idx_clips_library_lens_model ON clips (library_id, lens_model)",
+        "CREATE INDEX IF NOT EXISTS idx_clips_library_video_codec ON clips (library_id, video_codec)",
+        "CREATE INDEX IF NOT EXISTS idx_clips_library_iso ON clips (library_id, iso)",
+    ):
+        conn.execute(text(ddl))
 
 
 def _table_names(inspector) -> Set[str]:
@@ -283,6 +303,7 @@ def ensure_schema() -> None:
         if "clips" in tables:
             existing = _column_names(inspector, "clips")
             _add_missing_columns(conn, "clips", _CLIP_COLUMN_MIGRATIONS, existing)
+            _ensure_clip_metadata_indexes(conn)
             from services.storage.backfill import backfill_clip_storage_refs
 
             backfill_clip_storage_refs(conn)

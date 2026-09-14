@@ -196,6 +196,14 @@ class Clip(Base):
     width = Column(Integer)
     height = Column(Integer)
     duration_seconds = Column(Float)
+    media_kind = Column(String(16))
+    lens_model = Column(String(255))
+    iso = Column(Integer)
+    video_codec = Column(String(64))
+    audio_codec = Column(String(64))
+    has_gps = Column(Integer)  # 0/1 boolean for SQLite
+    capture_timezone_offset = Column(String(32))
+    software = Column(String(255))
     metadata_json = Column(Text)
 
     library = relationship("Library", back_populates="clips")
