@@ -19,7 +19,7 @@ from routes.me import router as me_router
 from routes.workspaces import router as workspaces_router
 from services.ffmpeg_service import generate_thumbnail
 from services.storage import StoragePurpose, get_storage_service
-from services.metadata_service import extract_media_metadata
+from services.metadata_service import extract_media_metadata, merge_upload_provenance
 from services.upload_safety import safe_upload_basename
 
 load_dotenv()
@@ -127,6 +127,14 @@ async def upload_media(
                 "width": None,
                 "height": None,
                 "duration_seconds": None,
+                "media_kind": None,
+                "lens_model": None,
+                "iso": None,
+                "video_codec": None,
+                "audio_codec": None,
+                "has_gps": False,
+                "capture_timezone_offset": None,
+                "software": None,
                 "metadata": None,
             }
 
@@ -146,6 +154,14 @@ async def upload_media(
         )
 
         structured = extracted.get("metadata")
+        if structured:
+            merge_upload_provenance(
+                structured,
+                uploaded_at=datetime.utcnow(),
+                uploaded_by_user_id=uploader_id,
+                uploaded_by_display_name=getattr(ctx.user, "display_name", None),
+                library_id=library_id,
+            )
         metadata_json = json.dumps(structured) if structured else None
 
         # Validate category belongs to active library when provided
@@ -185,6 +201,14 @@ async def upload_media(
             width=extracted.get("width"),
             height=extracted.get("height"),
             duration_seconds=extracted.get("duration_seconds"),
+            media_kind=extracted.get("media_kind"),
+            lens_model=extracted.get("lens_model"),
+            iso=extracted.get("iso"),
+            video_codec=extracted.get("video_codec"),
+            audio_codec=extracted.get("audio_codec"),
+            has_gps=1 if extracted.get("has_gps") else 0,
+            capture_timezone_offset=extracted.get("capture_timezone_offset"),
+            software=extracted.get("software"),
             metadata_json=metadata_json,
         )
 
