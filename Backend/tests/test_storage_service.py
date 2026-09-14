@@ -138,7 +138,8 @@ def test_default_provider_is_routing_adapter():
         "services.azure_service.AZURE_CONNECTION_STRING",
         "DefaultEndpointsProtocol=https;AccountName=x;AccountKey=y==",
     ):
-        service = StorageService()
+        with patch.dict("os.environ", {"SLYVR_STORAGE_PROVIDER": ""}, clear=False):
+            service = StorageService()
 
     assert isinstance(service.provider, RoutingStorageProvider)
     assert service.provider.write_provider_name == PROVIDER_AZURE

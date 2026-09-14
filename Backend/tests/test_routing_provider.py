@@ -130,7 +130,8 @@ def test_factory_defaults_to_azure_when_connection_string_set():
         "services.azure_service.AZURE_CONNECTION_STRING",
         "DefaultEndpointsProtocol=https;AccountName=x;AccountKey=y==",
     ):
-        assert resolve_write_provider_name() == PROVIDER_AZURE
+        with patch.dict("os.environ", {"SLYVR_STORAGE_PROVIDER": ""}, clear=False):
+            assert resolve_write_provider_name() == PROVIDER_AZURE
 
 
 def test_factory_explicit_b2():
