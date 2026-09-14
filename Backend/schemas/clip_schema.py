@@ -58,6 +58,15 @@ class ClipResponse(BaseModel):
     width: Optional[int] = None
     height: Optional[int] = None
     duration_seconds: Optional[float] = None
+    altitude: Optional[float] = None
+    media_kind: Optional[str] = None
+    lens_model: Optional[str] = None
+    iso: Optional[int] = None
+    video_codec: Optional[str] = None
+    audio_codec: Optional[str] = None
+    has_gps: Optional[bool] = None
+    capture_timezone_offset: Optional[str] = None
+    software: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
     class Config:
