@@ -110,7 +110,7 @@ export function LandingNavbar() {
 
         <div className="relative z-10 flex shrink-0 items-center justify-end gap-3 sm:gap-5">
           <Link
-            to="/app"
+            to="/login"
             className="text-[13px] text-[var(--clip-muted)] hover:text-[var(--clip-fg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]"
           >
             Sign in

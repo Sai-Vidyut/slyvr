@@ -1,10 +1,6 @@
 import type { Category, Clip, Person } from "@/types/clip";
 import { LANDING_CLIPS } from "@/lib/landing-clips";
 
-const LOCAL_API = "http://127.0.0.1:8000";
-/** Keep local probes short so demo mode never feels stuck. */
-const LOCAL_PROBE_MS = 250;
-
 function parseDurationSeconds(label: string): number {
   const parts = label.split(":").map((p) => Number(p));
   if (parts.length === 2 && parts.every((n) => Number.isFinite(n))) {
@@ -63,26 +59,9 @@ export type DemoLibrary = {
   source: "localhost" | "static";
 };
 
-export function getStaticDemoLibrary(): DemoLibrary {
-  return {
-    clips: STATIC_DEMO_CLIPS,
-    categories: STATIC_DEMO_CATEGORIES,
-    people: STATIC_DEMO_PEOPLE,
-    source: "static",
-  };
-}
+const LOCAL_API = "http://127.0.0.1:8000";
 
-/** Only probe the local FastAPI while developing on localhost. */
-export function shouldProbeLocalDemoApi(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
-}
-
-async function fetchLocalJson<T>(
-  path: string,
-  timeoutMs = LOCAL_PROBE_MS,
-): Promise<T | null> {
+async function fetchJson<T>(path: string, timeoutMs = 700): Promise<T | null> {
   try {
     const response = await fetch(`${LOCAL_API}${path}`, {
       signal: AbortSignal.timeout(timeoutMs),
@@ -95,14 +74,26 @@ async function fetchLocalJson<T>(
 }
 
 /**
- * Resolve the demo library for double-click demo mode.
- *
- * Public hosts (e.g. buildwsai.online) always get the static sample library
- * immediately — no localhost dependency. Local Vite/dev may prefer live clips
- * from 127.0.0.1:8000 when that API is up.
+ * Production: always static, read-only sample data (never authenticated APIs).
+ * Local/dev: optionally prefer unreachable-auth localhost only when not in PROD.
  */
 export async function resolveDemoLibrary(): Promise<DemoLibrary> {
-  const staticLibrary = getStaticDemoLibrary();
+  if (import.meta.env.PROD) {
+    return {
+      clips: STATIC_DEMO_CLIPS,
+      categories: STATIC_DEMO_CATEGORIES,
+      people: STATIC_DEMO_PEOPLE,
+      source: "static",
+    };
+  }
+
+  // Dev-only: try unauthenticated local API. If auth is required (401), fall back to static.
+  const clipsPayload = await fetchJson<{ clips: Clip[] }>("/clips");
+  if (clipsPayload?.clips?.length) {
+    const [categories, people] = await Promise.all([
+      fetchJson<Category[]>("/categories/all"),
+      fetchJson<Person[]>("/people"),
+    ]);
 
   if (!shouldProbeLocalDemoApi()) {
     return staticLibrary;

@@ -1,0 +1,7 @@
+# Install to /etc/caddy/Caddyfile (see README.md).
+# Terminates TLS for the public API; uvicorn stays on 127.0.0.1:8000 only.
+
+api.buildwsai.online {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:8000
+}

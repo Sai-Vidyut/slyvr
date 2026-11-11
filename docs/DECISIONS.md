@@ -76,11 +76,13 @@ Decisions evidenced by the **current** Slyvr codebase. Inferred items are labele
 
 ---
 
-### Azure Blob Storage
+### Object storage (Azure first provider)
 
-**Decision:** Media and thumbnails stored in Azure Blob (`AZURE_CONNECTION_STRING`).  
-**Why:** Offloads binary storage from the API host.  
-**Consequence:** Local demos require Azure (or a future storage abstraction).
+**Decision:** Media and thumbnails live in object storage. Each `Clip` stores provider-neutral refs (`storage_provider`, `media_object_key`, `thumbnail_object_key`) as the canonical storage identity; `blob_url` / `thumbnail_url` remain compatibility/read fields for the API and existing clients. Runtime I/O goes through `Backend/services/storage/` with an Azure Blob adapter (`AZURE_CONNECTION_STRING`).
+**Why:** Offloads binaries from the API host and decouples persistence from permanent provider URLs before multi-provider or signed-read work.
+**Consequence:** Local uploads still require Azure until another provider is implemented; per-library provider choice remains a later phase.
+
+**Phase 3 read access:** Authenticated `GET /clips/{id}/read-url?purpose=media|thumbnail` resolves the clip in the active library, builds a server-side `StoredObjectRef`, and returns a short-lived read URL (Azure SAS when signable). Legacy URL signing requires the blob URL host to match the configured Azure account; foreign hosts are not signed. Legacy external URLs are passed through without server fetch. Deploy `SLYVR_SIGNED_MEDIA_READS=1` together with `VITE_SIGNED_MEDIA_READS=1`. Optional `SLYVR_HIDE_DIRECT_MEDIA_URLS=1` omits raw blob URLs from API responses only after the frontend uses read-url. **Private media enforcement requires Azure containers to be set private in deployment** — the application does not change container ACLs.
 
 ---
 
@@ -92,8 +94,23 @@ Decisions evidenced by the **current** Slyvr codebase. Inferred items are labele
 
 ---
 
-### No authentication *(inferred)*
+### No authentication *(superseded)*
 
-**Decision:** Open API within the deployment network.  
-**Why:** Current product stage is single-operator library.  
-**Consequence:** Must not expose the API publicly without adding auth.
+**Decision (historical):** Open API within the deployment network for single-operator use.  
+**Update:** Supabase Auth JWT verification + library/workspace authorization is now required for protected media APIs. Demo remains unauthenticated and frontend-only.
+
+---
+
+### Unified Library abstraction
+
+**Decision:** Personal and workspace media share one `libraries` table (`personal` | `workspace` | `legacy`).  
+**Why:** One active media context for clips, search, categories, and future AI.  
+**Consequence:** Every clip query is scoped by verified `library_id`; uploader is separate from library ownership.
+
+---
+
+### Supabase as identity provider only
+
+**Decision:** Use Supabase Auth for signup/login/session; keep SQLite + Azure for media.  
+**Why:** Avoid migrating the media database; ship auth quickly.  
+**Consequence:** FastAPI verifies JWTs and mirrors users into a local `users` table.

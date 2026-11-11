@@ -1,15 +1,18 @@
 export const queryKeys = {
+  me: (token: string | null) => ["me", token ? "auth" : "anon"] as const,
+  libraries: ["libraries"] as const,
   clips: {
-    all: ["clips"] as const,
-    search: (params: Record<string, string>) =>
-      ["clips", "search", params] as const,
-    detail: (id: number) => ["clips", id] as const,
+    all: (libraryId: number | null) => ["clips", libraryId] as const,
+    search: (libraryId: number | null, params: Record<string, string>) =>
+      ["clips", "search", libraryId, params] as const,
+    detail: (libraryId: number | null, id: number) =>
+      ["clips", libraryId, id] as const,
   },
   categories: {
-    all: ["categories"] as const,
+    all: (libraryId: number | null) => ["categories", libraryId] as const,
   },
   people: {
-    all: ["people"] as const,
+    all: (libraryId: number | null) => ["people", libraryId] as const,
   },
   health: ["health"] as const,
 };

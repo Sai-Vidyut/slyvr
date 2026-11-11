@@ -1,14 +1,16 @@
 import { m } from "framer-motion";
-import { Calendar, Camera, Loader2, MapPin, Users } from "lucide-react";
+import { Loader2, Users } from "lucide-react";
 import { useState } from "react";
 
 import { MotionButton } from "@/components/ui/motion-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ClipMetadataSections } from "@/components/clips/ClipMetadataSections";
+import { useClipReadUrl } from "@/hooks/use-clip-read-url";
 import {
   useDeleteClipMutation,
   useUpdateClipMutation,
 } from "@/hooks/use-clips-queries";
+import { isSignedMediaReadsEnabled } from "@/lib/signed-media-reads";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { drawerSectionContainer, fadeUp } from "@/lib/motion";
 import type { Category, Clip } from "@/types/clip";
@@ -20,12 +22,15 @@ interface ClipInspectorFormProps {
   clip: Clip;
   categories: Category[];
   onDeleted: () => void;
+  /** Demo/static clips: use blob_url directly (no read-url API). */
+  directMediaUrls?: boolean;
 }
 
 export function ClipInspectorForm({
   clip,
   categories,
   onDeleted,
+  directMediaUrls = false,
 }: ClipInspectorFormProps) {
   const reduced = useReducedMotion();
   const updateMutation = useUpdateClipMutation();
@@ -35,6 +40,9 @@ export function ClipInspectorForm({
   const [title, setTitle] = useState(clip.title || "");
   const [description, setDescription] = useState(clip.description || "");
   const [category, setCategory] = useState(clip.category || "");
+  const signedReads = isSignedMediaReadsEnabled() && !directMediaUrls;
+  const mediaRead = useClipReadUrl(clip.id, "media", signedReads);
+  const mediaSrc = signedReads ? mediaRead.data?.url : clip.blob_url;
 
   const handleSave = async () => {
     await updateMutation.mutateAsync({
@@ -65,20 +73,26 @@ export function ClipInspectorForm({
           variants={fadeUp}
           className="overflow-hidden rounded-md border border-[var(--clip-border)] bg-black"
         >
-          {clip.blob_url ? (
+          {signedReads && mediaRead.isLoading ? (
+            <div className="flex items-center justify-center py-12 text-meta">
+              <Loader2 className="mr-2 size-5 animate-spin" aria-hidden />
+              Loading media…
+            </div>
+          ) : mediaSrc ? (
             clip.mime_type?.startsWith("image/") ? (
               <img
-                src={clip.blob_url}
+                src={mediaSrc}
                 alt=""
                 className="max-h-[240px] w-full object-contain md:max-h-[280px]"
               />
             ) : (
               <video
+                key={mediaSrc}
                 controls
                 preload="metadata"
                 className="max-h-[240px] w-full object-contain md:max-h-[280px]"
               >
-                <source src={clip.blob_url} type={clip.mime_type || "video/mp4"} />
+                <source src={mediaSrc} type={clip.mime_type || "video/mp4"} />
               </video>
             )
           ) : (
@@ -146,35 +160,6 @@ export function ClipInspectorForm({
             </div>
           </m.div>
         )}
-
-        <m.div
-          variants={fadeUp}
-          className="space-y-2 border-t border-[var(--clip-border)] pt-4 text-sm text-[var(--clip-muted)]"
-        >
-          {clip.camera_model && (
-            <div className="flex items-center gap-2">
-              <Camera size={16} aria-hidden />
-              {[clip.camera_make, clip.camera_model].filter(Boolean).join(" ")}
-            </div>
-          )}
-          {clip.latitude != null && clip.longitude != null && (
-            <div className="flex items-center gap-2">
-              <MapPin size={16} aria-hidden />
-              {clip.latitude.toFixed(4)}, {clip.longitude.toFixed(4)}
-            </div>
-          )}
-          {clip.uploaded_at && (
-            <div className="flex items-center gap-2">
-              <Calendar size={16} aria-hidden />
-              {new Date(clip.uploaded_at).toLocaleString()}
-            </div>
-          )}
-          {clip.file_size != null && clip.file_size > 0 && (
-            <p className="text-meta">
-              {(clip.file_size / (1024 * 1024)).toFixed(2)} MB
-            </p>
-          )}
-        </m.div>
 
         <m.div variants={fadeUp}>
           <ClipMetadataSections clip={clip} />

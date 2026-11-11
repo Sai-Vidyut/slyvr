@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import fs from "fs";
 import path from "path";
 import { defineConfig } from "vite";
@@ -38,5 +39,10 @@ export default defineConfig(({ command, isPreview }) => ({
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },
+  },
+  test: {
+    environment: "happy-dom",
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 }));

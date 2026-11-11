@@ -53,6 +53,9 @@ type MobileWorkspaceChromeProps = {
   browseOpen: boolean;
   onBrowseOpenChange: (open: boolean) => void;
   activeFilterSummary?: string | null;
+  librarySwitcher?: ReactNode;
+  accountMenu?: ReactNode;
+  libraryTitle?: string;
 };
 
 export function MobileWorkspaceChrome({
@@ -79,6 +82,9 @@ export function MobileWorkspaceChrome({
   browseOpen,
   onBrowseOpenChange,
   activeFilterSummary,
+  librarySwitcher,
+  accountMenu,
+  libraryTitle = "Library",
 }: MobileWorkspaceChromeProps) {
   const reduced = useReducedMotion();
   const [focused, setFocused] = useState(false);
@@ -134,11 +140,14 @@ export function MobileWorkspaceChrome({
           <div className="min-w-0">
             <p className="text-label leading-none">Slyvr</p>
             <p className="mt-1 truncate text-sm font-medium tracking-tight">
-              Library
+              {libraryTitle}
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
+            {librarySwitcher}
+            {accountMenu}
+
             <m.button
               type="button"
               disabled={apiTogglePending}
@@ -165,9 +174,9 @@ export function MobileWorkspaceChrome({
               whileTap={reduced || apiTogglePending ? undefined : buttonTap}
               aria-label={mobileApiAriaLabel}
               className={cn(
-                "inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[var(--clip-border)] px-2.5",
+                "inline-flex min-h-11 items-center gap-1 rounded-md px-2",
                 "text-xs outline-none focus-visible:ring-1 focus-visible:ring-[var(--clip-focus)]",
-                "disabled:opacity-50",
+                "transition-colors hover:bg-[var(--clip-surface)] disabled:opacity-50",
                 apiTone,
               )}
             >

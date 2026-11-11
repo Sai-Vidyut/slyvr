@@ -8,6 +8,7 @@ export interface Category {
   name: string;
 }
 
+/** Legacy v1 / serializer shim file section. */
 export interface ClipMetadataFile {
   filename?: string | null;
   file_size?: number | null;
@@ -15,8 +16,13 @@ export interface ClipMetadataFile {
   extension?: string | null;
   width?: number | null;
   height?: number | null;
+  /** Present on schema v2 `file` group before API legacy shim. */
+  original_filename?: string | null;
+  size_bytes?: number | null;
+  media_kind?: string | null;
 }
 
+/** Legacy v1 / serializer shim capture section. */
 export interface ClipMetadataCapture {
   captured_at?: string | null;
   camera_make?: string | null;
@@ -40,8 +46,10 @@ export interface ClipMetadataLocation {
   longitude?: number | null;
   altitude?: number | null;
   gps_timestamp?: string | null;
+  horizontal_accuracy_m?: number | null;
 }
 
+/** Legacy v1 / serializer shim video section. */
 export interface ClipMetadataVideo {
   duration_seconds?: number | null;
   codec?: string | null;
@@ -51,17 +59,101 @@ export interface ClipMetadataVideo {
   audio_codec?: string | null;
   audio_channels?: number | null;
   audio_sample_rate?: number | null;
+  rotation_degrees?: number | null;
+  stream?: ClipMetadataVideoStream | null;
 }
 
+export interface ClipMetadataVideoStream {
+  codec?: string | null;
+  profile?: string | null;
+  level?: number | null;
+  width?: number | null;
+  height?: number | null;
+  frame_rate?: string | null;
+  pixel_format?: string | null;
+  bitrate?: number | null;
+}
+
+export interface ClipMetadataAudioStream {
+  codec?: string | null;
+  channels?: number | null;
+  sample_rate?: number | null;
+  bitrate?: number | null;
+}
+
+export interface ClipMetadataAudio {
+  stream?: ClipMetadataAudioStream | null;
+}
+
+/** Schema v2 capture group (may be replaced by legacy shim in API responses). */
+export interface ClipMetadataV2Capture {
+  captured_at?: string | null;
+  captured_at_source?: string | null;
+  modified_at?: string | null;
+  timezone_offset?: string | null;
+}
+
+/** Union of legacy capture shim and raw v2 capture group on the same JSON key. */
+export type ClipMetadataCaptureSection = ClipMetadataCapture &
+  Partial<ClipMetadataV2Capture>;
+
+export interface ClipMetadataV2Device {
+  make?: string | null;
+  model?: string | null;
+}
+
+export interface ClipMetadataV2LensExposure {
+  lens_model?: string | null;
+  focal_length_mm?: string | number | null;
+  focal_length_35mm_equiv?: string | number | null;
+  aperture_f?: string | number | null;
+  shutter_s?: string | number | null;
+  iso?: string | number | null;
+  exposure_compensation?: string | number | null;
+  flash?: string | null;
+  white_balance?: string | null;
+  orientation?: string | number | null;
+  color_space?: string | null;
+}
+
+export interface ClipMetadataV2ProvenanceFileHistory {
+  software?: string | null;
+  encoder?: string | null;
+  create_date_raw?: string | null;
+  modify_date_raw?: string | null;
+}
+
+export interface ClipMetadataV2ProvenanceIngest {
+  uploaded_at?: string | null;
+  uploaded_by_user_id?: string | null;
+  uploaded_by_display_name?: string | null;
+  library_id?: number | null;
+}
+
+export interface ClipMetadataV2Provenance {
+  file_history?: ClipMetadataV2ProvenanceFileHistory | null;
+  ingest?: ClipMetadataV2ProvenanceIngest | null;
+}
+
+/**
+ * Clip `metadata` JSON: legacy v1 sections and/or schema v2 groups.
+ * API v2 responses merge legacy shims into `capture`, `file`, and `video`.
+ */
 export interface ClipMetadata {
-  file?: ClipMetadataFile;
-  capture?: ClipMetadataCapture;
-  location?: ClipMetadataLocation;
-  video?: ClipMetadataVideo;
+  schema_version?: number | null;
+  capture?: ClipMetadataCaptureSection | null;
+  device?: ClipMetadataV2Device | null;
+  lens_exposure?: ClipMetadataV2LensExposure | null;
+  location?: ClipMetadataLocation | null;
+  video?: ClipMetadataVideo | null;
+  audio?: ClipMetadataAudio | null;
+  file?: ClipMetadataFile | null;
+  provenance?: ClipMetadataV2Provenance | null;
 }
 
 export interface Clip {
   id: number;
+  library_id?: number | null;
   title: string;
   description?: string | null;
   category?: string | null;
@@ -74,14 +166,28 @@ export interface Clip {
   camera_make?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  altitude?: number | null;
   location_label?: string | null;
   recorded_at?: string | null;
   uploaded_at?: string | null;
+  uploaded_by?: {
+    id: string;
+    display_name?: string | null;
+    email?: string | null;
+  } | null;
   file_size?: number | null;
   mime_type?: string | null;
   width?: number | null;
   height?: number | null;
   duration_seconds?: number | null;
+  media_kind?: string | null;
+  lens_model?: string | null;
+  iso?: number | null;
+  video_codec?: string | null;
+  audio_codec?: string | null;
+  has_gps?: boolean | null;
+  capture_timezone_offset?: string | null;
+  software?: string | null;
   metadata?: ClipMetadata | null;
 }
 
@@ -96,6 +202,10 @@ export interface SearchFacets {
   years?: string[];
   locations?: string[];
   file_types?: string[];
+  media_kinds?: string[];
+  lens_models?: string[];
+  video_codecs?: string[];
+  has_gps?: string[];
 }
 
 export interface SearchResponse {
@@ -111,6 +221,10 @@ export interface SearchParams {
   year?: string;
   location?: string;
   file_type?: string;
+  media_kind?: string;
+  has_gps?: boolean;
+  lens_model?: string;
+  video_codec?: string;
 }
 
 export interface UpdateClipPayload {
@@ -121,4 +235,54 @@ export interface UpdateClipPayload {
 
 export interface HealthResponse {
   status: string;
+}
+
+export type SearchFacetKey =
+  | "person"
+  | "category"
+  | "device"
+  | "year"
+  | "location"
+  | "file_type"
+  | "media_kind"
+  | "has_gps"
+  | "lens_model"
+  | "video_codec";
+
+export type ActiveSearchFacets = Partial<Record<SearchFacetKey, string>>;
+
+const SEARCH_FACET_SECTION_LABELS: Record<SearchFacetKey, string> = {
+  person: "People",
+  category: "Categories",
+  device: "Devices",
+  year: "Years",
+  location: "Locations",
+  file_type: "Type",
+  media_kind: "Media",
+  has_gps: "Location data",
+  lens_model: "Lens",
+  video_codec: "Video codec",
+};
+
+export function searchFacetChipLabel(key: SearchFacetKey, value: string): string {
+  return `${SEARCH_FACET_SECTION_LABELS[key]}: ${value}`;
+}
+
+export function metadataParamsFromFacets(
+  facets: ActiveSearchFacets,
+): Pick<SearchParams, "media_kind" | "has_gps" | "lens_model" | "video_codec"> {
+  const mediaLabel = facets.media_kind;
+  let media_kind: string | undefined;
+  if (mediaLabel === "Photo") {
+    media_kind = "photo";
+  } else if (mediaLabel === "Video") {
+    media_kind = "video";
+  }
+
+  return {
+    media_kind,
+    has_gps: facets.has_gps === "With location data" ? true : undefined,
+    lens_model: facets.lens_model,
+    video_codec: facets.video_codec,
+  };
 }

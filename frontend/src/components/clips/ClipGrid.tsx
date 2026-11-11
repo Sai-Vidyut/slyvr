@@ -29,6 +29,8 @@ interface ClipGridProps {
   selectedClipId?: number | null;
   /** Changes when search/filters change — drives grid crossfade */
   filterSignature?: string;
+  /** Demo/static clips: use thumbnail_url directly (no read-url API). */
+  directMediaUrls?: boolean;
 }
 
 function EmptyContent({
@@ -93,6 +95,7 @@ function ClipGrid({
   filterLabel,
   selectedClipId = null,
   filterSignature = "default",
+  directMediaUrls = false,
 }: ClipGridProps) {
   const reduced = useReducedMotion();
   const hasClips = clips.length > 0;
@@ -209,6 +212,7 @@ function ClipGrid({
                                 listSize={totalVisible}
                                 layout={useLayout}
                                 isSelected={selectedClipId === clip.id}
+                                directMediaUrls={directMediaUrls}
                                 onClick={() => onClipClick(clip)}
                               />
                             ))}

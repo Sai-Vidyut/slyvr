@@ -58,7 +58,7 @@ Current API has **no** auth.
 
 ### Storage abstraction
 
-Interface over Azure (and later S3/local). Current code talks to Azure directly via `azure_service.py`.
+Provider interface lives under `Backend/services/storage/`; Azure is the first implementation via `azure_service.py`. Clips now persist provider-neutral object keys as canonical identity; `blob_url` / `thumbnail_url` stay for client compatibility until signed reads or a media proxy (Phase 3). Future: S3/R2, per-library provider configuration, OAuth-backed consumer storage, and managed Slyvr Storage as additional providers.
 
 ### Metadata normalization
 

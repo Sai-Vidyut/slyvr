@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from models import Category, Clip, Person
@@ -37,6 +37,118 @@ TOKEN_RE = re.compile(r"[a-z0-9]+", re.I)
 
 def _tokens(query: str) -> List[str]:
     return [t.lower() for t in TOKEN_RE.findall(query) if len(t) >= 2]
+
+
+def _normalize_media_kind_param(value: Optional[str]) -> Optional[str]:
+    if not value or not str(value).strip():
+        return None
+    kind = str(value).strip().lower()
+    if kind in ("photo", "video"):
+        return kind
+    return None
+
+
+def _effective_media_kind(clip: Clip) -> Optional[str]:
+    if clip.media_kind and str(clip.media_kind).strip():
+        kind = str(clip.media_kind).strip().lower()
+        if kind in ("photo", "video"):
+            return kind
+    mime = (clip.mime_type or "").lower()
+    if mime.startswith("image/"):
+        return "photo"
+    if mime.startswith("video/"):
+        return "video"
+    return None
+
+
+def _media_kind_facet_label(kind: str) -> str:
+    if kind == "photo":
+        return "Photo"
+    if kind == "video":
+        return "Video"
+    return kind.title()
+
+
+def _effective_has_gps(clip: Clip) -> bool:
+    if clip.has_gps is not None and clip.has_gps == 1:
+        return True
+    return clip.latitude is not None and clip.longitude is not None
+
+
+def _facet_params_active(
+    *,
+    person: Optional[str],
+    category: Optional[str],
+    device: Optional[str],
+    year: Optional[str],
+    location: Optional[str],
+    file_type: Optional[str],
+    media_kind: Optional[str],
+    has_gps: Optional[bool],
+    lens_model: Optional[str],
+    video_codec: Optional[str],
+) -> bool:
+    return any(
+        [
+            person,
+            category,
+            device,
+            year,
+            location,
+            file_type,
+            lens_model,
+            video_codec,
+            _normalize_media_kind_param(media_kind),
+            has_gps is True,
+        ]
+    )
+
+
+def _apply_structured_sql_filters(
+    query,
+    *,
+    media_kind: Optional[str] = None,
+    has_gps: Optional[bool] = None,
+    lens_model: Optional[str] = None,
+    video_codec: Optional[str] = None,
+):
+    mk = _normalize_media_kind_param(media_kind)
+    if mk == "photo":
+        query = query.filter(
+            or_(
+                Clip.media_kind == "photo",
+                and_(
+                    or_(Clip.media_kind.is_(None), Clip.media_kind == ""),
+                    Clip.mime_type.ilike("image/%"),
+                ),
+            )
+        )
+    elif mk == "video":
+        query = query.filter(
+            or_(
+                Clip.media_kind == "video",
+                and_(
+                    or_(Clip.media_kind.is_(None), Clip.media_kind == ""),
+                    Clip.mime_type.ilike("video/%"),
+                ),
+            )
+        )
+
+    if has_gps is True:
+        query = query.filter(
+            or_(
+                Clip.has_gps == 1,
+                and_(Clip.latitude.isnot(None), Clip.longitude.isnot(None)),
+            )
+        )
+
+    if lens_model and lens_model.strip():
+        query = query.filter(Clip.lens_model.ilike(lens_model.strip()))
+
+    if video_codec and video_codec.strip():
+        query = query.filter(Clip.video_codec.ilike(video_codec.strip()))
+
+    return query
 
 
 def _score_clip(clip: Clip, query: str, tokens: List[str]) -> float:
@@ -135,7 +247,9 @@ def _score_clip(clip: Clip, query: str, tokens: List[str]) -> float:
     return score
 
 
-def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
+def _candidate_clips(
+    db: Session, tokens: List[str], query: str, library_id: int
+) -> List[Clip]:
     if not tokens:
         return []
 
@@ -160,6 +274,7 @@ def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
         db.query(Clip)
         .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .outerjoin(Category, Clip.category_id == Category.id)
+        .filter(Clip.library_id == library_id)
         .filter(or_(*clauses))
         .all()
     )
@@ -168,6 +283,7 @@ def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
         db.query(Clip)
         .options(joinedload(Clip.category_rel), joinedload(Clip.people))
         .join(Clip.people)
+        .filter(Clip.library_id == library_id)
         .filter(or_(*[Person.name.ilike(f"%{token}%") for token in tokens]))
         .all()
     )
@@ -178,11 +294,14 @@ def _candidate_clips(db: Session, tokens: List[str], query: str) -> List[Clip]:
     return list(by_id.values())
 
 
-def _typo_fallback_candidates(db: Session, query: str, tokens: List[str]) -> List[Clip]:
+def _typo_fallback_candidates(
+    db: Session, query: str, tokens: List[str], library_id: int
+) -> List[Clip]:
     """When SQL ILIKE misses (typos), scan recent titles with fuzzy matching only."""
     recent = (
         db.query(Clip)
         .options(joinedload(Clip.category_rel), joinedload(Clip.people))
+        .filter(Clip.library_id == library_id)
         .order_by(Clip.uploaded_at.desc())
         .limit(800)
         .all()
@@ -211,6 +330,10 @@ def _apply_facet_filters(
     year: Optional[str] = None,
     location: Optional[str] = None,
     file_type: Optional[str] = None,
+    media_kind: Optional[str] = None,
+    has_gps: Optional[bool] = None,
+    lens_model: Optional[str] = None,
+    video_codec: Optional[str] = None,
 ) -> List[Clip]:
     filtered = clips
 
@@ -272,6 +395,29 @@ def _apply_facet_filters(
             )
         ]
 
+    if media_kind:
+        mk = _normalize_media_kind_param(media_kind)
+        if mk is None:
+            return []
+        filtered = [c for c in filtered if _effective_media_kind(c) == mk]
+
+    if has_gps is True:
+        filtered = [c for c in filtered if _effective_has_gps(c)]
+
+    if lens_model:
+        lm = lens_model.strip().lower()
+        filtered = [
+            c for c in filtered if c.lens_model and c.lens_model.strip().lower() == lm
+        ]
+
+    if video_codec:
+        vc = video_codec.strip().lower()
+        filtered = [
+            c
+            for c in filtered
+            if c.video_codec and c.video_codec.strip().lower() == vc
+        ]
+
     return filtered
 
 
@@ -282,6 +428,10 @@ def _build_facets(clips: List[Clip]) -> Dict[str, List[str]]:
     years: Counter[str] = Counter()
     locations: Counter[str] = Counter()
     file_types: Counter[str] = Counter()
+    media_kinds: Counter[str] = Counter()
+    lens_models: Counter[str] = Counter()
+    video_codecs: Counter[str] = Counter()
+    gps_count = 0
 
     for clip in clips:
         for person in clip.people:
@@ -307,6 +457,19 @@ def _build_facets(clips: List[Clip]) -> Dict[str, List[str]]:
         elif clip.original_filename and "." in clip.original_filename:
             file_types[clip.original_filename.rsplit(".", 1)[-1].lower()] += 1
 
+        effective_kind = _effective_media_kind(clip)
+        if effective_kind:
+            media_kinds[_media_kind_facet_label(effective_kind)] += 1
+
+        if clip.lens_model and str(clip.lens_model).strip():
+            lens_models[str(clip.lens_model).strip()] += 1
+
+        if clip.video_codec and str(clip.video_codec).strip():
+            video_codecs[str(clip.video_codec).strip()] += 1
+
+        if _effective_has_gps(clip):
+            gps_count += 1
+
     def top(counter: Counter[str], limit: int = 12) -> List[str]:
         return [name for name, _ in counter.most_common(limit)]
 
@@ -317,7 +480,12 @@ def _build_facets(clips: List[Clip]) -> Dict[str, List[str]]:
         "years": sorted(top(years), reverse=True),
         "locations": top(locations),
         "file_types": top(file_types),
+        "media_kinds": sorted(top(media_kinds), key=lambda label: (label != "Photo", label)),
+        "lens_models": top(lens_models),
+        "video_codecs": top(video_codecs),
     }
+    if gps_count:
+        facets["has_gps"] = ["With location data"]
     return {k: v for k, v in facets.items() if v}
 
 
@@ -325,18 +493,34 @@ def search_clips_ranked(
     db: Session,
     query: str,
     *,
+    library_id: int,
     person: Optional[str] = None,
     category: Optional[str] = None,
     device: Optional[str] = None,
     year: Optional[str] = None,
     location: Optional[str] = None,
     file_type: Optional[str] = None,
+    media_kind: Optional[str] = None,
+    has_gps: Optional[bool] = None,
+    lens_model: Optional[str] = None,
+    video_codec: Optional[str] = None,
     limit: int = 200,
 ) -> Tuple[List[Clip], Dict[str, Any]]:
     q = (query or "").strip()
     empty_facets: Dict[str, Any] = {}
 
-    if not q and not any([person, category, device, year, location, file_type]):
+    if not q and not _facet_params_active(
+        person=person,
+        category=category,
+        device=device,
+        year=year,
+        location=location,
+        file_type=file_type,
+        media_kind=media_kind,
+        has_gps=has_gps,
+        lens_model=lens_model,
+        video_codec=video_codec,
+    ):
         return [], empty_facets
 
     tokens = _tokens(q) if q else []
@@ -344,18 +528,28 @@ def search_clips_ranked(
         tokens = [q.lower()]
 
     if q:
-        candidates = _candidate_clips(db, tokens, q)
+        candidates = _candidate_clips(db, tokens, q, library_id)
         if not candidates:
-            candidates = _typo_fallback_candidates(db, q, tokens)
+            candidates = _typo_fallback_candidates(db, q, tokens, library_id)
         scored = [(clip, _score_clip(clip, q, tokens)) for clip in candidates]
         scored = [(clip, score) for clip, score in scored if score >= 40]
         scored.sort(key=lambda item: item[1], reverse=True)
         ranked = [clip for clip, _ in scored[:limit]]
     else:
-        ranked = (
+        base_query = (
             db.query(Clip)
             .options(joinedload(Clip.category_rel), joinedload(Clip.people))
-            .order_by(Clip.uploaded_at.desc())
+            .filter(Clip.library_id == library_id)
+        )
+        base_query = _apply_structured_sql_filters(
+            base_query,
+            media_kind=media_kind,
+            has_gps=has_gps,
+            lens_model=lens_model,
+            video_codec=video_codec,
+        )
+        ranked = (
+            base_query.order_by(Clip.uploaded_at.desc())
             .limit(limit)
             .all()
         )
@@ -368,6 +562,10 @@ def search_clips_ranked(
         year=year,
         location=location,
         file_type=file_type,
+        media_kind=media_kind,
+        has_gps=has_gps,
+        lens_model=lens_model,
+        video_codec=video_codec,
     )
 
     # Facets from query-matched set before facet filters, then re-filter display

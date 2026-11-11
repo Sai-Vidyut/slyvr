@@ -5,45 +5,47 @@ import shutil
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-from models import (
-    Clip,
-    Person,
-)
-
-from database import (
-    SessionLocal,
-    ensure_schema,
-)
-
-from services.metadata_service import extract_media_metadata
-from services.ffmpeg_service import generate_thumbnail
-from services.azure_service import upload_file_to_azure
-
+from auth.config import get_settings
+from auth.deps import ActiveLibraryContext, get_active_library_context
+from database import SessionLocal, ensure_schema
+from models import Clip, Person
 from routes.clips import router as clips_router
+from routes.me import router as me_router
+from routes.workspaces import router as workspaces_router
+from services.ffmpeg_service import generate_thumbnail
+from services.storage import StoragePurpose, get_storage_service
+from services.metadata_service import extract_media_metadata, merge_upload_provenance
+from services.upload_safety import safe_upload_basename
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Clear cached settings after dotenv load
+get_settings.cache_clear()
+
+ensure_schema()
+
 app = FastAPI(title="Slyvr")
 
 app.include_router(clips_router)
+app.include_router(me_router)
+app.include_router(workspaces_router)
 
+settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-ensure_schema()
 
 TEMP_DIR = "./temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -60,7 +62,6 @@ def _is_image(filename: str, content_type: Optional[str]) -> bool:
 
 def _prepare_thumbnail(temp_media_path: str, is_image: bool) -> str:
     if is_image:
-        # Use the original image as the thumbnail asset
         thumb_path = f"{temp_media_path}.thumb{os.path.splitext(temp_media_path)[1] or '.jpg'}"
         shutil.copy2(temp_media_path, thumb_path)
         return thumb_path
@@ -74,6 +75,7 @@ async def upload_media(
     description: str = Form(""),
     category_id: int = Form(None),
     person_ids: str = Form(""),
+    ctx: ActiveLibraryContext = Depends(get_active_library_context),
 ):
     """Accept video or still image uploads. Field name kept as `video` for API compatibility."""
     temp_media_path = None
@@ -82,17 +84,30 @@ async def upload_media(
 
     try:
         db = SessionLocal()
+        library_id = ctx.library.id
+        uploader_id = ctx.user.id
 
-        original_name = video.filename or "upload.bin"
+        # Ignore any client-supplied uploader identity; JWT context is authoritative.
+        original_name = safe_upload_basename(video.filename)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         stored_filename = f"{timestamp}_{original_name}"
         temp_media_path = os.path.join(TEMP_DIR, stored_filename)
+        temp_resolved = os.path.realpath(temp_media_path)
+        temp_root = os.path.realpath(TEMP_DIR)
+        if not temp_resolved.startswith(temp_root + os.sep) and temp_resolved != temp_root:
+            raise HTTPException(status_code=400, detail="Invalid upload filename")
 
+        max_bytes = settings.max_upload_bytes
+        file_size = 0
         with open(temp_media_path, "wb") as buffer:
-            content = await video.read()
-            buffer.write(content)
-
-        file_size = os.path.getsize(temp_media_path)
+            while True:
+                chunk = await video.read(1024 * 1024)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > max_bytes:
+                    raise HTTPException(status_code=413, detail="Upload too large")
+                buffer.write(chunk)
         is_image = _is_image(original_name, video.content_type)
 
         logger.info("Media saved temporarily at %s (image=%s)", temp_media_path, is_image)
@@ -112,24 +127,67 @@ async def upload_media(
                 "width": None,
                 "height": None,
                 "duration_seconds": None,
+                "media_kind": None,
+                "lens_model": None,
+                "iso": None,
+                "video_codec": None,
+                "audio_codec": None,
+                "has_gps": False,
+                "capture_timezone_offset": None,
+                "software": None,
                 "metadata": None,
             }
 
         temp_thumbnail_path = _prepare_thumbnail(temp_media_path, is_image)
         logger.info("Thumbnail prepared at %s", temp_thumbnail_path)
 
-        media_blob_url = upload_file_to_azure(temp_media_path, "clips")
-        thumbnail_blob_url = upload_file_to_azure(temp_thumbnail_path, "thumbnails")
+        storage = get_storage_service()
+        media_stored = storage.upload_file(
+            temp_media_path,
+            library_id=library_id,
+            purpose=StoragePurpose.MEDIA,
+        )
+        thumbnail_stored = storage.upload_file(
+            temp_thumbnail_path,
+            library_id=library_id,
+            purpose=StoragePurpose.THUMBNAIL,
+        )
 
         structured = extracted.get("metadata")
+        if structured:
+            merge_upload_provenance(
+                structured,
+                uploaded_at=datetime.utcnow(),
+                uploaded_by_user_id=uploader_id,
+                uploaded_by_display_name=getattr(ctx.user, "display_name", None),
+                library_id=library_id,
+            )
         metadata_json = json.dumps(structured) if structured else None
 
+        # Validate category belongs to active library when provided
+        resolved_category_id = None
+        if category_id is not None:
+            from models import Category
+
+            category = (
+                db.query(Category)
+                .filter(Category.id == category_id, Category.library_id == library_id)
+                .first()
+            )
+            if category:
+                resolved_category_id = category.id
+
         clip = Clip(
+            library_id=library_id,
+            uploaded_by_user_id=uploader_id,
             title=title,
             description=description,
-            category_id=category_id,
-            blob_url=media_blob_url,
-            thumbnail_url=thumbnail_blob_url,
+            category_id=resolved_category_id,
+            storage_provider=media_stored.provider,
+            media_object_key=media_stored.object_key,
+            thumbnail_object_key=thumbnail_stored.object_key,
+            blob_url=media_stored.read_url,
+            thumbnail_url=thumbnail_stored.read_url,
             original_filename=original_name,
             stored_filename=stored_filename,
             file_size=file_size,
@@ -143,12 +201,24 @@ async def upload_media(
             width=extracted.get("width"),
             height=extracted.get("height"),
             duration_seconds=extracted.get("duration_seconds"),
+            media_kind=extracted.get("media_kind"),
+            lens_model=extracted.get("lens_model"),
+            iso=extracted.get("iso"),
+            video_codec=extracted.get("video_codec"),
+            audio_codec=extracted.get("audio_codec"),
+            has_gps=1 if extracted.get("has_gps") else 0,
+            capture_timezone_offset=extracted.get("capture_timezone_offset"),
+            software=extracted.get("software"),
             metadata_json=metadata_json,
         )
 
         if person_ids:
             ids = [int(x) for x in person_ids.split(",") if x.strip()]
-            people = db.query(Person).filter(Person.id.in_(ids)).all()
+            people = (
+                db.query(Person)
+                .filter(Person.id.in_(ids), Person.library_id == library_id)
+                .all()
+            )
             clip.people = people
 
         db.add(clip)
@@ -159,17 +229,22 @@ async def upload_media(
             if path and os.path.exists(path):
                 os.remove(path)
 
+        hide_upload_urls = get_settings().hide_direct_media_urls
         return {
             "success": True,
             "message": "Media uploaded successfully",
             "clip_id": clip.id,
-            "video_blob_url": media_blob_url,
-            "thumbnail_blob_url": thumbnail_blob_url,
+            "library_id": library_id,
+            "uploaded_by_user_id": uploader_id,
+            "video_blob_url": None if hide_upload_urls else media_stored.read_url,
+            "thumbnail_blob_url": None if hide_upload_urls else thumbnail_stored.read_url,
             "metadata": extracted,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Error during upload: %s", str(e))
+        logger.exception("Error during upload")
 
         for path in (temp_media_path, temp_thumbnail_path):
             if path and os.path.exists(path):
@@ -178,10 +253,7 @@ async def upload_media(
                 except OSError:
                     pass
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Upload failed: {str(e)}",
-        )
+        raise HTTPException(status_code=500, detail="Upload failed")
 
     finally:
         if db:

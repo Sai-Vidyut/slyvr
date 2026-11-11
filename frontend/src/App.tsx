@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import LandingPage from "./pages/LandingPage";
+import AuthPage from "./pages/AuthPage";
+import { AppEntry } from "./pages/AppEntry";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
@@ -20,7 +22,16 @@ function App() {
       >
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/app" element={<Dashboard />} />
+          <Route path="/login" element={<AuthPage mode="login" />} />
+          <Route path="/signup" element={<AuthPage mode="signup" />} />
+          <Route
+            path="/app"
+            element={
+              <AppEntry>
+                <Dashboard />
+              </AppEntry>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

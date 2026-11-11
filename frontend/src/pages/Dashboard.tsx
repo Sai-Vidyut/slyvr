@@ -1,6 +1,7 @@
 import { m } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Navigate, useSearchParams } from "react-router-dom";
 
 import ClipDetailsDrawer from "../components/clips/ClipDetailsDrawer";
 import ClipGrid from "../components/clips/ClipGrid";
@@ -11,6 +12,10 @@ import {
 } from "../components/clips/SearchFacetBar";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import { AccountMenu } from "../components/layout/AccountMenu";
+import { LibrarySwitcher } from "../components/library/LibrarySwitcher";
+import { MobileBrowseSheet } from "../components/mobile/MobileBrowseSheet";
+import { MobileWorkspaceChrome } from "../components/mobile/MobileWorkspaceChrome";
 import UploadModal from "../components/upload/UploadModal";
 
 import { useApiConnection } from "@/hooks/use-api-connection";
@@ -20,12 +25,16 @@ import {
   useClipsQuery,
   usePeopleQuery,
   useSearchClipsQuery,
+  hasActiveSearchParams,
 } from "@/hooks/use-clips-queries";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { pageEnter } from "@/lib/motion";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
+import { useLibrary } from "@/providers/library-provider";
 import type { Clip, SearchParams } from "@/types/clip";
+import { metadataParamsFromFacets, searchFacetChipLabel } from "@/types/clip";
 
 function formatStorage(bytes: number) {
   if (bytes >= 1_000_000_000) {
@@ -43,7 +52,15 @@ function formatStorage(bytes: number) {
 function Dashboard() {
   const queryClient = useQueryClient();
   const reduced = useReducedMotion();
-  const api = useApiConnection();
+  const isMobile = useIsMobile();
+  const { session } = useAuth();
+  const [desktopTopMenu, setDesktopTopMenu] = useState<"library" | "account" | null>(
+    null,
+  );
+  const { activeLibraryId, activeLibrary } = useLibrary();
+  const [params] = useSearchParams();
+  const demoRequested = params.get("demo") === "1";
+  const api = useApiConnection({ autoEnterDemo: demoRequested && !session });
 
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebouncedValue(searchQuery, 250);
@@ -59,7 +76,17 @@ function Dashboard() {
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
 
-  const isSearchActive = debouncedSearch.trim().length > 0;
+  // Reset browse UI when the active library changes (render-time adjust).
+  const [scopedLibraryId, setScopedLibraryId] = useState(activeLibraryId);
+  if (activeLibraryId !== scopedLibraryId) {
+    setScopedLibraryId(activeLibraryId);
+    setSelectedClipId(null);
+    setDrawerOpen(false);
+    setSelectedCategory("All Clips");
+    setSelectedPerson("All People");
+    setSearchQuery("");
+    setSearchFacets({});
+  }
 
   const searchParams: SearchParams = useMemo(
     () => ({
@@ -74,6 +101,7 @@ function Dashboard() {
       year: searchFacets.year,
       location: searchFacets.location,
       file_type: searchFacets.file_type,
+      ...metadataParamsFromFacets(searchFacets),
     }),
     [
       debouncedSearch,
@@ -83,7 +111,10 @@ function Dashboard() {
     ],
   );
 
-  const apiQueriesEnabled = api.connectionEnabled && !api.demoMode;
+  const isSearchActive = hasActiveSearchParams(searchParams);
+
+  const apiQueriesEnabled =
+    Boolean(session) && api.connectionEnabled && !api.demoMode;
   const categoriesQuery = useCategoriesQuery(apiQueriesEnabled);
   const peopleQuery = usePeopleQuery(apiQueriesEnabled);
   const clipsQuery = useClipsQuery(apiQueriesEnabled && !isSearchActive);
@@ -199,14 +230,20 @@ function Dashboard() {
       : undefined;
 
   const handleRefresh = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.clips.all });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.clips.all(activeLibraryId),
+    });
     if (isSearchActive) {
       void queryClient.invalidateQueries({
-        queryKey: ["clips", "search"],
+        queryKey: ["clips", "search", activeLibraryId],
       });
     }
-    void queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.people.all });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.categories.all(activeLibraryId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.people.all(activeLibraryId),
+    });
   };
 
   const clipsError = api.demoMode
@@ -231,6 +268,209 @@ function Dashboard() {
       return next;
     });
   };
+
+  const openUpload = () => {
+    if (api.demoMode || !session) return;
+    setUploadOpen(true);
+  };
+
+  const libraryTitle = api.demoMode
+    ? "Demo"
+    : (activeLibrary?.name ?? "Library");
+
+  const filterChipRow =
+    hasFilters || isSearchActive ? (
+      <m.div
+        layout={!reduced}
+        className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        initial={reduced ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        {debouncedSearch.trim().length > 0 && (
+          <FilterChip
+            label={`Search: ${debouncedSearch.trim()}`}
+            onClear={() => {
+              setSearchQuery("");
+            }}
+          />
+        )}
+        {Object.entries(searchFacets).map(([key, value]) =>
+          value ? (
+            <FilterChip
+              key={key}
+              label={searchFacetChipLabel(key as SearchFacetKey, value)}
+              onClear={() => handleFacetChange(key as SearchFacetKey, null)}
+            />
+          ) : null,
+        )}
+        {hasCategoryFilter && (
+          <FilterChip
+            label={selectedCategory}
+            onClear={() => setSelectedCategory("All Clips")}
+          />
+        )}
+        {hasPersonFilter && (
+          <FilterChip
+            label={selectedPerson}
+            onClear={() => setSelectedPerson("All People")}
+          />
+        )}
+      </m.div>
+    ) : null;
+
+  const libraryBody = (
+    <>
+      {clipsError && (
+        <div
+          role="alert"
+          className="mb-4 border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-100"
+        >
+          Could not load clips. Confirm the API is running, then refresh
+          {isMobile
+            ? " — or open More and enter demo mode."
+            : " — or double-click the API control for demo mode."}
+        </div>
+      )}
+
+      {api.demoMode && (
+        <div
+          role="status"
+          className="mb-4 border border-sky-900/40 bg-sky-950/30 px-3 py-2 text-sm text-sky-100"
+        >
+          Demo mode is on. Showing sample clips
+          {api.demoClips.some((c) => c.id > 0)
+            ? " from your local API"
+            : ""}
+          .{" "}
+          {isMobile
+            ? "Long-press API or use More to exit."
+            : "Double-click the API control to exit."}
+        </div>
+      )}
+
+      {isSearchActive && !isLoading && (
+        <SearchFacetBar
+          facets={resultFacets}
+          active={searchFacets}
+          onChange={handleFacetChange}
+        />
+      )}
+
+      <ClipGrid
+        clips={filteredClips}
+        isLoading={isLoading}
+        isFetching={isFetchingClips && !isLoading}
+        directMediaUrls={api.demoMode}
+        filterSignature={filterSignature}
+        emptyKind={emptyKind as "none" | "filtered" | "search"}
+        filterLabel={filterLabel}
+        selectedClipId={selectedClipId}
+        onClearFilters={() => {
+          setSearchQuery("");
+          setSearchFacets({});
+          setSelectedCategory("All Clips");
+          setSelectedPerson("All People");
+        }}
+        onUpload={openUpload}
+        onClipClick={(clip) => {
+          drawerReturnFocusRef.current =
+            document.activeElement as HTMLElement | null;
+          setSelectedClipId(clip.id);
+          setDrawerOpen(true);
+        }}
+      />
+    </>
+  );
+
+  const sharedOverlays = (
+    <>
+      <ClipDetailsDrawer
+        clipId={selectedClipId}
+        clipOverride={selectedDemoClip}
+        isOpen={drawerOpen}
+        returnFocusRef={drawerReturnFocusRef}
+        onClose={() => {
+          setDrawerOpen(false);
+          setSelectedClipId(null);
+        }}
+      />
+
+      {uploadOpen && !api.demoMode && session ? (
+        <UploadModal
+          returnFocusRef={uploadButtonRef}
+          onClose={() => setUploadOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+
+  // Unauthenticated visitors may only stay in demo mode.
+  // When ?demo=1, autoEnterDemo starts with isToggling=true so this guard
+  // waits for demo initialization instead of racing to /login.
+  if (!session && !api.demoMode && !api.isToggling) {
+    return <Navigate to="/login?next=%2Fapp" replace />;
+  }
+
+  if (isMobile) {
+    const activeFilterSummary = hasCategoryFilter
+      ? selectedCategory
+      : hasPersonFilter
+        ? selectedPerson
+        : null;
+
+    return (
+      <>
+        <MobileWorkspaceChrome
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          isSearching={isSearching}
+          clipCount={allClipsForStats.length}
+          storageLabel={formatStorage(totalStorage)}
+          filterChips={filterChipRow}
+          apiVisualState={api.visualState}
+          apiStatusLabel={api.statusLabel}
+          apiTogglePending={api.isToggling}
+          apiCaption={api.apiButtonLabel}
+          demoMode={api.demoMode}
+          onApiToggle={() => api.toggle()}
+          onEnterDemo={() => void api.enterDemoMode()}
+          onExitDemo={() => api.exitDemoMode()}
+          onRefresh={handleRefresh}
+          isRefreshing={isFetchingClips}
+          onUpload={openUpload}
+          uploadButtonRef={uploadButtonRef}
+          browseOpen={browseOpen}
+          onBrowseOpenChange={setBrowseOpen}
+          activeFilterSummary={activeFilterSummary}
+          librarySwitcher={
+            session && !api.demoMode ? <LibrarySwitcher compact /> : null
+          }
+          accountMenu={session && !api.demoMode ? <AccountMenu compact /> : null}
+          libraryTitle={libraryTitle}
+        >
+          {libraryBody}
+        </MobileWorkspaceChrome>
+
+        <MobileBrowseSheet
+          open={browseOpen}
+          onClose={() => setBrowseOpen(false)}
+          categories={categories}
+          people={people}
+          selectedCategory={selectedCategory}
+          selectedPerson={selectedPerson}
+          onCategoryChange={setSelectedCategory}
+          onPersonChange={setSelectedPerson}
+          isLoading={
+            api.demoMode
+              ? false
+              : categoriesQuery.isLoading || peopleQuery.isLoading
+          }
+        />
+
+        {sharedOverlays}
+      </>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] bg-[var(--clip-bg)] text-[var(--clip-fg)]">
@@ -260,7 +500,7 @@ function Dashboard() {
         <Topbar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onUpload={() => setUploadOpen(true)}
+          onUpload={openUpload}
           onRefresh={handleRefresh}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           isSearching={isSearching}
@@ -271,6 +511,23 @@ function Dashboard() {
           apiTogglePending={api.isToggling}
           apiButtonCaption={api.apiButtonLabel}
           onApiToggle={() => api.toggle()}
+          librarySwitcher={
+            session && !api.demoMode ? (
+              <LibrarySwitcher
+                open={desktopTopMenu === "library"}
+                onOpenChange={(next) => setDesktopTopMenu(next ? "library" : null)}
+              />
+            ) : null
+          }
+          accountMenu={
+            session && !api.demoMode ? (
+              <AccountMenu
+                open={desktopTopMenu === "account"}
+                onOpenChange={(next) => setDesktopTopMenu(next ? "account" : null)}
+              />
+            ) : null
+          }
+          uploadDisabled={api.demoMode || !session}
         />
 
         <m.main
@@ -283,7 +540,7 @@ function Dashboard() {
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
                 <p className="text-label">Slyvr</p>
-                <h1 className="text-title mt-1">Library</h1>
+                <h1 className="text-title mt-1">{libraryTitle}</h1>
               </div>
               <dl className="flex flex-wrap gap-x-6 gap-y-1 text-meta tabular-nums">
                 <div>

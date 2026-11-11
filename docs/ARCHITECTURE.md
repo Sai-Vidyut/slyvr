@@ -15,7 +15,7 @@ Slyvr is a **private media library** for personal video and photo archives. User
 5. Open a clip inspector to edit fields and view extracted metadata
 6. Optionally disconnect the API via the top-bar Active/Off control
 
-There is **no user authentication** in the current implementation. Privacy is “single-operator / local or privately hosted API,” not multi-tenant SaaS.
+There is **Supabase Auth** for identity. Media remains on FastAPI + SQLite + Azure. Privacy is enforced server-side via JWT verification and library/workspace membership — not by trusting the client.
 
 ---
 
@@ -70,7 +70,8 @@ flowchart TB
 | Path | Component | Notes |
 |------|-----------|--------|
 | `/` | `LandingPage` | Eager-loaded |
-| `/app` | `Dashboard` | Lazy-loaded via `React.lazy` |
+| `/login`, `/signup` | `AuthPage` | Supabase email/password |
+| `/app` | `Dashboard` | Lazy-loaded; requires session unless `?demo=1` |
 | `*` | Navigate → `/` | |
 
 Entrypoint: `frontend/src/main.tsx` → `AppProviders` → `App`.
@@ -150,7 +151,8 @@ Path alias `@/` → `frontend/src` (Vite).
 | `metadata_service.py` | ExifTool JSON + ffprobe → structured metadata |
 | `search_service.py` | Candidate SQL + RapidFuzz scoring + facets |
 | `ffmpeg_service.py` | Video thumbnail via FFmpeg |
-| `azure_service.py` | Blob upload/delete |
+| `storage/*` + `azure_service.py` | Storage facade; Azure upload/delete + SAS read URLs; clips store provider/object keys + compatibility URLs |
+| `clip_read_access.py` | Authorized clip → `StoredObjectRef` → short-lived read URL (Phase 3) |
 | `exif_service.py` | Legacy narrow ExifTool helper (upload uses `metadata_service`) |
 | `clip_service.py` | CRUD helpers; legacy ILIKE `search_clips` retained |
 
@@ -163,11 +165,23 @@ multipart POST /upload (field name: video)
   → write temp file under Backend/temp_uploads/
   → extract_media_metadata()  [non-fatal on failure]
   → thumbnail: copy for images OR FFmpeg still for video
-  → upload media + thumbnail to Azure
-  → insert Clip row (+ people M2M)
+  → upload media + thumbnail via storage facade (Azure today)
+  → insert Clip row with provider/object keys and blob URLs (+ people M2M)
   → delete temp files
   → JSON response { clip_id, urls, metadata }
 ```
+
+**Phase 3 media read (optional, `SLYVR_SIGNED_MEDIA_READS`):**
+
+```text
+JWT + X-Library-Id → GET /clips/{id}/read-url?purpose=media|thumbnail
+  → get_clip_by_id (library scoped)
+  → resolve StoredObjectRef (DB refs or parse blob URL when host matches configured Azure account)
+  → StorageService.issue_read_url → Azure read SAS
+  → browser <img>/<video> src = SAS URL (no Authorization on media tag)
+```
+
+Legacy non-Azure URLs are returned unchanged. Container privatization is an ops prerequisite; code does not alter Azure ACLs.
 
 **Images:** detected by extension / `content_type`; original file copied as thumbnail.  
 **Videos:** FFmpeg thumbnail at ~1s.  
@@ -382,12 +396,12 @@ No Redux / Zustand. Landing uses local motion + scroll hooks.
 
 ## 17. Security / privacy
 
-- **Secrets:** `AZURE_CONNECTION_STRING` in `Backend/.env` (gitignored). Never commit `.env`.  
-- **CORS:** currently `*`.  
-- **Auth:** none. Anyone who can reach the API can read/write library data.  
+- **Secrets:** `AZURE_CONNECTION_STRING`, `SUPABASE_JWT_SECRET` in `Backend/.env` (gitignored). Frontend may use public `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` only.  
+- **CORS:** explicit allowlist (not `*`).  
+- **Auth:** Bearer Supabase JWT; active library via `X-Library-Id` verified server-side.  
 - **GPS:** stored as raw coordinates; no third-party geocoder; OSM link is client-side only.  
-- **Uploads:** original bytes preserved; temp files deleted after success/failure.  
-- **Public exposure:** treat Azure URLs and API as private infrastructure.
+- **Uploads:** original bytes preserved; temp files deleted after success/failure; `uploaded_by_user_id` from JWT only.  
+- **Public exposure:** treat Azure URLs and API as private infrastructure; demo is static frontend-only.
 
 ---
 
