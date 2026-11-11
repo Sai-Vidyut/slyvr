@@ -5,7 +5,11 @@ import { motionToast as toast } from "@/components/ui/motion-toast";
 import type { ApiStatusVisualState } from "@/components/ui/api-status-icon";
 import { useHealthQuery } from "@/hooks/use-clips-queries";
 import { getApiErrorMessage } from "@/lib/api-client";
-import { resolveDemoLibrary, type DemoLibrary } from "@/lib/demo-library";
+import {
+  getStaticDemoLibrary,
+  resolveDemoLibrary,
+  type DemoLibrary,
+} from "@/lib/demo-library";
 import { queryKeys } from "@/lib/query-keys";
 import { getHealth } from "@/services/api";
 import type { Category, Clip, Person } from "@/types/clip";
@@ -16,12 +20,16 @@ const DOUBLE_CLICK_MS = 320;
  * User-controlled API connection gate. Health check remains the source of truth
  * for whether the backend is actually reachable when connection is enabled.
  *
- * Double-click the API control to enter demo mode (localhost clips when available).
+ * Double-click the API control to enter demo mode (static sample library on
+ * public hosts; localhost clips when developing locally with the API up).
  */
 export function useApiConnection() {
   const queryClient = useQueryClient();
   const [connectionEnabled, setConnectionEnabled] = useState(true);
   const [isToggling, setIsToggling] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"demo" | "api" | null>(
+    null,
+  );
   const [demoMode, setDemoMode] = useState(false);
   const [demoClips, setDemoClips] = useState<Clip[]>([]);
   const [demoCategories, setDemoCategories] = useState<Category[]>([]);
@@ -53,7 +61,8 @@ export function useApiConnection() {
   ]);
 
   const statusLabel = useMemo(() => {
-    if (isToggling) return demoMode ? "Loading demo…" : "Connecting to API…";
+    if (isToggling && pendingAction === "demo") return "Loading demo…";
+    if (isToggling) return "Connecting to API…";
     if (demoMode) return "Demo mode — sample library (double-click API to exit)";
     if (!connectionEnabled) return "API disconnected";
     if (health.isError) return "API offline";
@@ -67,6 +76,7 @@ export function useApiConnection() {
     health.isFetching,
     isActive,
     isToggling,
+    pendingAction,
   ]);
 
   const clearSingleClickTimer = useCallback(() => {
@@ -74,6 +84,19 @@ export function useApiConnection() {
       window.clearTimeout(singleClickTimerRef.current);
       singleClickTimerRef.current = null;
     }
+  }, []);
+
+  const applyDemoLibrary = useCallback((library: DemoLibrary) => {
+    setDemoClips(library.clips);
+    setDemoCategories(library.categories);
+    setDemoPeople(library.people);
+    setDemoMode(true);
+    setConnectionEnabled(false);
+    toast.success(
+      library.source === "localhost"
+        ? "Demo mode — using clips from localhost"
+        : "Demo mode — sample library",
+    );
   }, []);
 
   const exitDemoMode = useCallback(() => {
@@ -85,25 +108,19 @@ export function useApiConnection() {
   }, []);
 
   const enterDemoMode = useCallback(async () => {
+    setPendingAction("demo");
     setIsToggling(true);
     try {
-      const library: DemoLibrary = await resolveDemoLibrary();
-      setDemoClips(library.clips);
-      setDemoCategories(library.categories);
-      setDemoPeople(library.people);
-      setDemoMode(true);
-      setConnectionEnabled(false);
-      toast.success(
-        library.source === "localhost"
-          ? "Demo mode — using clips from localhost"
-          : "Demo mode — sample library",
-      );
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
+      const library = await resolveDemoLibrary();
+      applyDemoLibrary(library);
+    } catch {
+      // Public/demo entry must never surface localhost/API failures.
+      applyDemoLibrary(getStaticDemoLibrary());
     } finally {
       setIsToggling(false);
+      setPendingAction(null);
     }
-  }, []);
+  }, [applyDemoLibrary]);
 
   const runSingleToggle = useCallback(async () => {
     if (isToggling) return;
@@ -118,6 +135,7 @@ export function useApiConnection() {
       return;
     }
 
+    setPendingAction("api");
     setIsToggling(true);
     setConnectionEnabled(true);
     try {
@@ -131,6 +149,7 @@ export function useApiConnection() {
       toast.error(getApiErrorMessage(error));
     } finally {
       setIsToggling(false);
+      setPendingAction(null);
     }
   }, [
     connectionEnabled,

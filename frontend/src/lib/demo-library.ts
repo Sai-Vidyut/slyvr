@@ -2,6 +2,8 @@ import type { Category, Clip, Person } from "@/types/clip";
 import { LANDING_CLIPS } from "@/lib/landing-clips";
 
 const LOCAL_API = "http://127.0.0.1:8000";
+/** Keep local probes short so demo mode never feels stuck. */
+const LOCAL_PROBE_MS = 250;
 
 function parseDurationSeconds(label: string): number {
   const parts = label.split(":").map((p) => Number(p));
@@ -61,7 +63,26 @@ export type DemoLibrary = {
   source: "localhost" | "static";
 };
 
-async function fetchJson<T>(path: string, timeoutMs = 700): Promise<T | null> {
+export function getStaticDemoLibrary(): DemoLibrary {
+  return {
+    clips: STATIC_DEMO_CLIPS,
+    categories: STATIC_DEMO_CATEGORIES,
+    people: STATIC_DEMO_PEOPLE,
+    source: "static",
+  };
+}
+
+/** Only probe the local FastAPI while developing on localhost. */
+export function shouldProbeLocalDemoApi(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+}
+
+async function fetchLocalJson<T>(
+  path: string,
+  timeoutMs = LOCAL_PROBE_MS,
+): Promise<T | null> {
   try {
     const response = await fetch(`${LOCAL_API}${path}`, {
       signal: AbortSignal.timeout(timeoutMs),
@@ -74,47 +95,51 @@ async function fetchJson<T>(path: string, timeoutMs = 700): Promise<T | null> {
 }
 
 /**
- * Prefer live clips from the local FastAPI (same data you see on localhost).
- * Fall back to a static sample library when the local API is offline.
+ * Resolve the demo library for double-click demo mode.
+ *
+ * Public hosts (e.g. buildwsai.online) always get the static sample library
+ * immediately — no localhost dependency. Local Vite/dev may prefer live clips
+ * from 127.0.0.1:8000 when that API is up.
  */
 export async function resolveDemoLibrary(): Promise<DemoLibrary> {
-  const clipsPayload = await fetchJson<{ clips: Clip[] }>("/clips");
-  if (clipsPayload?.clips?.length) {
-    const [categories, people] = await Promise.all([
-      fetchJson<Category[]>("/categories/all"),
-      fetchJson<Person[]>("/people"),
-    ]);
+  const staticLibrary = getStaticDemoLibrary();
 
-    const derivedCategories =
-      categories && categories.length > 0
-        ? categories
-        : Array.from(
-            new Set(
-              clipsPayload.clips
-                .map((c) => c.category)
-                .filter((name): name is string => Boolean(name)),
-            ),
-          ).map((name, i) => ({ id: i + 1, name }));
-
-    const derivedPeople =
-      people && people.length > 0
-        ? people
-        : Array.from(new Set(clipsPayload.clips.flatMap((c) => c.people ?? []))).map(
-            (name, i) => ({ id: i + 1, name }),
-          );
-
-    return {
-      clips: clipsPayload.clips,
-      categories: derivedCategories,
-      people: derivedPeople,
-      source: "localhost",
-    };
+  if (!shouldProbeLocalDemoApi()) {
+    return staticLibrary;
   }
 
+  const clipsPayload = await fetchLocalJson<{ clips: Clip[] }>("/clips");
+  if (!clipsPayload?.clips?.length) {
+    return staticLibrary;
+  }
+
+  const [categories, people] = await Promise.all([
+    fetchLocalJson<Category[]>("/categories/all"),
+    fetchLocalJson<Person[]>("/people"),
+  ]);
+
+  const derivedCategories =
+    categories && categories.length > 0
+      ? categories
+      : Array.from(
+          new Set(
+            clipsPayload.clips
+              .map((c) => c.category)
+              .filter((name): name is string => Boolean(name)),
+          ),
+        ).map((name, i) => ({ id: i + 1, name }));
+
+  const derivedPeople =
+    people && people.length > 0
+      ? people
+      : Array.from(
+          new Set(clipsPayload.clips.flatMap((c) => c.people ?? [])),
+        ).map((name, i) => ({ id: i + 1, name }));
+
   return {
-    clips: STATIC_DEMO_CLIPS,
-    categories: STATIC_DEMO_CATEGORIES,
-    people: STATIC_DEMO_PEOPLE,
-    source: "static",
+    clips: clipsPayload.clips,
+    categories: derivedCategories,
+    people: derivedPeople,
+    source: "localhost",
   };
 }
